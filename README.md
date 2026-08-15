@@ -26,13 +26,23 @@ docs/                          # metrics JSON, report drafts
 
 - [x] Phase 1 — unified schema, station registry, adjacency table, 5yr dataset (27,390 station-days)
 - [x] Phase 2 — baseline stacking classifier evaluated on time-based split
-- [ ] Phase 3 — sequence model (GRU, multi-horizon 24/48/72h)
-- [ ] Phase 4 — calibration + upstream-lag spatial features, ablation table
+- [x] Phase 3 — GRU sequence model, multi-horizon 24/48/72h, upstream-lag features (see `docs/ablation.md`)
+- [ ] Phase 4 — probability calibration (isotonic/Platt) + risk tiers
+- [ ] Phase 5 — Laravel backend + FastAPI inference microservice
 - [ ] Phase 5 — Laravel backend + FastAPI inference microservice
 - [ ] Phase 6 — React/Leaflet dashboard → Cloudflare Pages
 - [ ] Phase 7 — Twilio WhatsApp alerts
 - [ ] Phase 8 — scheduled live-data cron (Open-Meteo forecast feed)
 - [ ] Phase 9 — report draft (gap, dataset, methodology, ablation, limitations)
+
+## Train the sequence model
+
+```bash
+.venv/bin/python -m src.models.sequence_model --epochs 12
+```
+
+Writes `data/processed/flood_gru_v1.pt` (weights) and
+`docs/sequence_metrics.json` (test metrics).
 
 ## Setup
 

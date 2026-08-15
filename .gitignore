@@ -1,6 +1,15 @@
 .venv/
 __pycache__/
 *.pyc
+*.pyo
 data/raw/
 data/processed/
+flood_gru_v1.pt
+docs/sequence_metrics.json
+docs/baseline_metrics.json
+docs/calibration_metrics.json
+.ipynb_checkpoints/
+*.swp
+*.swo
 .DS_Store
+.env

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CircleMarker, MapContainer, Popup, ScaleControl, TileLayer, Tooltip, ZoomControl,
+  useMap,
 } from "react-leaflet";
 import type { DistrictRisk } from "../api";
 import { tierHex, useTheme, pct } from "../theme";
@@ -37,6 +38,18 @@ const LABELS = {
 };
 
 const TIER_LABEL = ["Low", "Medium", "High", "Severe"];
+
+/** Leaflet computes its size once at init; re-measure after layout settles
+ *  (font load, grid column resolution) so a 0-width mount doesn't stick. */
+function InvalidateOnMount() {
+  const map = useMap();
+  useEffect(() => {
+    const t1 = window.setTimeout(() => map.invalidateSize(), 150);
+    const t2 = window.setTimeout(() => map.invalidateSize(), 500);
+    return () => { window.clearTimeout(t1); window.clearTimeout(t2); };
+  }, [map]);
+  return null;
+}
 
 function BasemapSwitcher({
   value, onChange,
@@ -148,6 +161,7 @@ export default function MapView({
         )}
         <ZoomControl position="bottomright" />
         <ScaleControl position="bottomright" imperial={false} />
+        <InvalidateOnMount />
 
         {districts.map((d) => {
           const tier = d.tiers[idx];

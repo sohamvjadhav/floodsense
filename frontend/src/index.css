@@ -273,6 +273,9 @@ button { font: inherit; color: inherit; }
 /* ---------- Layout / panels ---------- */
 .main {
   max-width: 1440px; margin: 0 auto;
+  /* the app shell is a column flexbox; auto side margins would defeat
+     cross-axis stretch and collapse this container to content width */
+  width: 100%;
   padding: 24px 24px 48px;
   display: grid; gap: 20px;
 }

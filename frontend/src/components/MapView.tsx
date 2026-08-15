@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import {
   CircleMarker, MapContainer, Popup, ScaleControl, TileLayer, Tooltip, ZoomControl,
   useMap,
@@ -57,6 +57,28 @@ function BasemapSwitcher({
   value: BaseKey;
   onChange: (b: BaseKey) => void;
 }) {
+  const icons: Record<BaseKey, ReactElement> = {
+    satellite: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
+      </svg>
+    ),
+    light: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           strokeWidth="2" strokeLinecap="round">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+      </svg>
+    ),
+    dark: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+      </svg>
+    ),
+  };
   return (
     <div className="absolute right-3 top-3 z-[1000]">
       <div
@@ -70,15 +92,17 @@ function BasemapSwitcher({
             key={k}
             role="tab"
             aria-selected={value === k}
+            aria-label={BASEMAPS[k].label}
+            title={BASEMAPS[k].label}
             onClick={() => onChange(k)}
-            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors
-                        focus-visible:outline-none focus-visible:ring-2
-                        focus-visible:ring-accent/60
+            className={`flex h-7 w-7 items-center justify-center rounded-full
+                        transition-colors focus-visible:outline-none
+                        focus-visible:ring-2 focus-visible:ring-accent/60
                         ${value === k
                           ? "bg-accent text-accent-fg"
                           : "text-fg-muted hover:text-fg"}`}
           >
-            {BASEMAPS[k].label}
+            {icons[k]}
           </button>
         ))}
       </div>
@@ -93,7 +117,8 @@ function HorizonScrubber({
   onChange: (h: Horizon) => void;
 }) {
   return (
-    <div className="absolute left-1/2 top-3 z-[1000] -translate-x-1/2">
+    <div className="absolute left-3 right-[6.5rem] top-3 z-[1000] flex justify-center
+                    sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
       <div
         role="tablist"
         aria-label="Forecast horizon"
@@ -139,10 +164,14 @@ export default function MapView({
   // markers need strong contrast against satellite imagery: add a dark
   // halo stroke under the tier-colored stroke
   const showLabels = base === "satellite";
+  // fat-finger friendliness: bigger markers on touch devices
+  const coarse = typeof window.matchMedia === "function" &&
+    window.matchMedia("(pointer: coarse)").matches;
+  const touchBoost = coarse ? 2.5 : 0;
 
   return (
-    <div className="relative h-[480px] overflow-hidden rounded-xl border border-line
-                    lg:h-full lg:min-h-[560px]">
+    <div className="relative h-[62vh] overflow-hidden rounded-xl border border-line
+                    sm:h-[480px] lg:h-full lg:min-h-[560px]">
       <MapContainer
         center={CENTER}
         zoom={6.4}
@@ -171,7 +200,7 @@ export default function MapView({
             <CircleMarker
               key={d.station_id}
               center={[d.lat, d.lon]}
-              radius={9 + tier * 2.5}
+              radius={9 + touchBoost + tier * 2.5}
               pathOptions={{
                 color: isSel ? "#FFFFFF" : hex[tier],
                 weight: isSel ? 2.5 : base === "satellite" ? 2 : 1.5,

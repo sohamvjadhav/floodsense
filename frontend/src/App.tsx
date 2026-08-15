@@ -81,7 +81,7 @@ export default function App() {
   const selectedPop = districts.find((d) => d.district === selected)?.population;
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="app-shell flex flex-col">
       <header className="topbar">
         <div className="brand">
           <BrandMark />
@@ -97,7 +97,7 @@ export default function App() {
           {worst && (
             <button
               onClick={() => setSelected(worst.district)}
-              className="chip cursor-pointer hover:border-line-strong"
+              className="chip cursor-pointer hover:border-line-strong hide-mobile"
               title="Open highest-risk district"
             >
               <span className="h-1.5 w-1.5 rounded-full" style={{ background: hex[worstTier] }} />
@@ -117,7 +117,7 @@ export default function App() {
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full"
                     style={{ background: "currentColor" }} />
             </span>
-            {live ? `live · ${timeAgo(updatedAt)}` : "API offline"}
+            {live ? <>live<span className="hidden sm:inline"> · {timeAgo(updatedAt)}</span></> : "API offline"}
           </span>
           <button onClick={load} disabled={loading} className="btn">
             <svg className={`h-3.5 w-3.5 ${loading ? "animate-spin motion-reduce:animate-none" : ""}`}
@@ -200,7 +200,7 @@ export default function App() {
 
       <main className="main">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_400px]">
-          <div className="panel !p-2.5 min-h-[440px]">
+          <div className="panel !p-2.5 min-h-0 sm:min-h-[440px]">
             {districts.length === 0 && !error ? (
               <div className="skeleton h-full w-full" style={{ minHeight: 420, borderRadius: "var(--r-lg)" }} />
             ) : (

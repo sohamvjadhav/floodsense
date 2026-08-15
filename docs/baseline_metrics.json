@@ -1,0 +1,17 @@
+{
+  "model": "stacking (KNN+SVM+RF+DT -> LR)",
+  "features": [
+    "rainfall_mm",
+    "rain_3d_mm",
+    "rain_7d_mm",
+    "precip_hours",
+    "river_discharge_m3s",
+    "elevation_m"
+  ],
+  "split": "time-based 70/15/15",
+  "test_size": 4095,
+  "accuracy": 0.9987789987789988,
+  "precision_1": 0.9107142857142857,
+  "recall_1": 1.0,
+  "f1_1": 0.9532710280373832
+}

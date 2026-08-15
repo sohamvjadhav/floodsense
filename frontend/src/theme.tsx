@@ -26,7 +26,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(stored() ?? system());
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.setAttribute("data-theme", theme);
     try { localStorage.setItem("floodsense-theme", theme); } catch { /* private mode */ }
   }, [theme]);
 
@@ -46,26 +46,22 @@ export function useChartTheme() {
   const dark = theme === "dark";
   return {
     dark,
-    axis: dark ? "#5f6b80" : "#8a93a3",
-    grid: dark ? "#1f2a3f" : "#e4e7ec",
-    tooltipBg: dark ? "#101827" : "#ffffff",
-    tooltipBorder: dark ? "#2c3a55" : "#e4e7ec",
-    tooltipFg: dark ? "#e8edf5" : "#101828",
+    axis: dark ? "#7E8896" : "#6B7280",
+    grid: dark ? "#1F2733" : "#E7E4DC",
+    tooltipBg: dark ? "#11151D" : "#FFFFFF",
+    tooltipBorder: dark ? "#2A3445" : "#E7E4DC",
+    tooltipFg: dark ? "#E7ECF2" : "#0E1116",
   };
 }
 
-export const TIER_STYLES = [
-  { fg: "text-tier-low", dot: "bg-tier-low", soft: "bg-tier-low/10 border-tier-low/25" },
-  { fg: "text-tier-medium", dot: "bg-tier-medium", soft: "bg-tier-medium/10 border-tier-medium/25" },
-  { fg: "text-tier-high", dot: "bg-tier-high", soft: "bg-tier-high/10 border-tier-high/25" },
-  { fg: "text-tier-severe", dot: "bg-tier-severe", soft: "bg-tier-severe/10 border-tier-severe/25" },
-] as const;
+/** CSS band class per tier (see .band-* in index.css). */
+export const TIER_BAND = ["band-low", "band-medium", "band-high", "band-severe"] as const;
 
 /** Map-tier hex values for Leaflet markers, per theme. */
 export const tierHex = (dark: boolean) =>
   dark
-    ? ["#34d399", "#fbbf24", "#fb923c", "#f87171"]
-    : ["#059669", "#b45309", "#ea580c", "#dc2626"];
+    ? ["#5BC982", "#E0A93C", "#F0854D", "#F26666"]
+    : ["#1E8A4A", "#B97A0A", "#C2410C", "#D63B3B"];
 
 export const pct = (p: number, digits = 1) =>
   `${(p * 100).toFixed(digits)}%`;

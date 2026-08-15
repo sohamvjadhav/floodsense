@@ -4,6 +4,11 @@ Predicts district-level flood risk 24–72 hours in advance over the
 Godavari, Krishna, and Konkan basins, serving risk through a web dashboard
 and WhatsApp alerts. .
 
+**Stack:** Python · PyTorch · FastAPI · SQLAlchemy · APScheduler · React 19 ·
+Vite · Tailwind v4 · Leaflet · Recharts · Twilio WhatsApp · Open-Meteo.
+Single-service architecture: the FastAPI app serves the public API *and*
+runs GRU inference in-process — no internal microservice hop.
+
 ## Differentiation from base paper
 
 We reframe flood prediction as a **lead-time risk forecast** (probability
@@ -19,7 +24,10 @@ src/data/stations.py           # 15-station Maharashtra registry + upstream adja
 src/data/build_dataset.py      # Open-Meteo archive pull → unified daily schema
 src/models/baseline_stacking.py# base-paper baseline (ablation reference)
 src/models/sequence_model.py   # GRU sequence model, multi-horizon 24/48/72h
-data/processed/                # unified_daily.csv (generated, not committed)
+src/models/calibrate.py        # isotonic calibration + risk-tier thresholds
+api/                           # FastAPI service: endpoints, live job, WhatsApp alerts
+frontend/                      # React + Vite + Tailwind + Leaflet dashboard
+data/processed/                # model artifacts (committed) + CSV (regenerated)
 docs/                          # metrics JSON, report drafts, ablation
 ```
 
@@ -29,11 +37,35 @@ docs/                          # metrics JSON, report drafts, ablation
 - [x] Phase 2 — baseline stacking classifier evaluated on time-based split
 - [x] Phase 3 — GRU sequence model, multi-horizon 24/48/72h, upstream-lag features (see `docs/ablation.md`)
 - [x] Phase 4 — isotonic calibration + Low/Medium/High/Severe risk tiers (`docs/calibration_metrics.json`)
-- [ ] Phase 5 — Laravel backend + FastAPI inference microservice
-- [ ] Phase 6 — React/Leaflet dashboard → Cloudflare Pages
-- [ ] Phase 7 — Twilio WhatsApp alerts
-- [ ] Phase 8 — scheduled live-data cron (Open-Meteo forecast feed)
+- [x] Phase 5 — FastAPI backend: risk/map/detail/subscribe/history endpoints + live scheduled job
+- [x] Phase 6 — React/Leaflet dashboard: map, district detail, subscribe form
+- [x] Phase 7 — Twilio WhatsApp alerts (REST; credential-gated with logged fallback)
+- [x] Phase 8 — APScheduler live cycle: Open-Meteo → inference → risk state → alerts (`POST /api/cron/run` demo hook)
 - [ ] Phase 9 — report draft (gap, dataset, methodology, ablation, limitations)
+- [ ] Phase 10 — deploy: Render (`render.yaml`), Cloudflare Pages (`frontend/`)
+
+## Run the system
+
+```bash
+# backend — API + inference on port 8000 (Swagger docs at /docs)
+.venv/bin/uvicorn api.main:app --port 8000
+
+# force a live refresh + alert check (also the viva demo hook)
+curl -X POST localhost:8000/api/cron/run
+
+# frontend
+cd frontend && npm install
+VITE_API_URL=http://localhost:8000 npm run dev          # dev server
+VITE_API_URL=http://localhost:8000 npm run build        # production build
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/risk/map` | all districts: tier, color, 24/48/72h probabilities |
+| `GET /api/risk/{district}` | probability curve, rainfall + forecast outlook, risk history |
+| `POST /api/alerts/subscribe` | `{phone, district}` → WhatsApp subscription (Indian E.164 validated) |
+| `GET /api/stations/{id}/history` | recent readings for detail charts |
+| `POST /api/cron/run` | run one live cycle now (fetch → infer → alert check) |
 
 ## Train the sequence model
 
@@ -134,11 +166,13 @@ See the ablation analysis comparing:
 
 ## Calibration (docs/calibration_metrics.json)
 
-Isotonic calibration on validation set, producing 4 risk tiers:
-- **Low**: probability < 0.3
-- **Medium**: 0.3 ≤ probability < 0.5
-- **High**: 0.5 ≤ probability < 0.7
-- **Severe**: probability ≥ 0.7
+Isotonic calibration on validation set. Risk-tier thresholds are the
+90th/97th/99.5th percentiles of calibrated validation probabilities
+(quantile-based, so tiers stay meaningful under class imbalance):
+- **Low**: below 90th percentile
+- **Medium**: 90th–97th
+- **High**: 97th–99.5th
+- **Severe**: above 99.5th
 
 ## Train the baseline stacking
 

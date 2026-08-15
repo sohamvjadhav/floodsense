@@ -78,13 +78,22 @@ def add_upstream_lags(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def make_windows(df: pd.DataFrame):
-    """Build (N, WINDOW, F) sequence tensors + static matrix + 3 horizon labels."""
+    """Build (N, WINDOW, F) sequences + static matrix + 3 horizon labels.
+
+    Returns (X_seq, X_static, y, dates, sids, stats) — `stats` carries the
+    normalization constants, persisted by main() so the inference API
+    transforms live inputs identically to training.
+    """
     df = add_upstream_lags(df)
-    # normalize per-feature using full-df stats (documented; recomputed per run)
+    df[["up_rain_lag1", "up_rain_lag2"]] = df[["up_rain_lag1", "up_rain_lag2"]].fillna(0.0)
     seq_mu = df[SEQ_FEATURES].mean()
     seq_sd = df[SEQ_FEATURES].std().replace(0, 1.0)
     st_mu = df[STATIC_FEATURES].mean()
     st_sd = df[STATIC_FEATURES].std().replace(0, 1.0)
+    stats = {
+        "seq_mu": seq_mu.tolist(), "seq_sd": seq_sd.tolist(),
+        "st_mu": st_mu.tolist(), "st_sd": st_sd.tolist(),
+    }
 
     X_seq, X_static, y, dates, sids = [], [], [], [], []
     for sid, g in df.groupby("station_id"):
@@ -101,7 +110,7 @@ def make_windows(df: pd.DataFrame):
             dates.append(d[i])
             sids.append(sid)
     return (np.stack(X_seq), np.stack(X_static), np.array(y, dtype=np.float32),
-            pd.to_datetime(dates), np.array(sids))
+            pd.to_datetime(dates), np.array(sids), stats)
 
 
 class FloodGRU(nn.Module):
@@ -148,7 +157,7 @@ def evaluate(model, split, name, thr=0.5):
 
 def main(data_path, epochs=15, bs=256, lr=1e-3, out="docs/sequence_metrics.json"):
     df = pd.read_csv(data_path, parse_dates=["date"])
-    X_seq, X_static, y, dates, sids = make_windows(df)
+    X_seq, X_static, y, dates, sids, stats = make_windows(df)
     print(f"windows: {len(y)} | positives per horizon:",
           {f"{24*h}h": int(y[:, i].sum()) for i, h in enumerate(HORIZONS)})
 
@@ -186,6 +195,8 @@ def main(data_path, epochs=15, bs=256, lr=1e-3, out="docs/sequence_metrics.json"
     print(json.dumps(test_metrics, indent=2))
 
     torch.save(model.state_dict(), "data/processed/flood_gru_v1.pt")
+    with open("data/processed/norm_stats.json", "w") as f:
+        json.dump(stats, f)
     with open(out, "w") as f:
         json.dump(test_metrics, f, indent=2)
     print("model → data/processed/flood_gru_v1.pt | metrics →", out)

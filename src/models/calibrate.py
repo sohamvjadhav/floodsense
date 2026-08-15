@@ -28,7 +28,7 @@ def main(data_path="data/processed/unified_daily.csv",
          ckpt="data/processed/flood_gru_v1.pt",
          out="docs/calibration_metrics.json"):
     df = pd.read_csv(data_path, parse_dates=["date"])
-    X_seq, X_static, y, dates, sids = make_windows(df)
+    X_seq, X_static, y, dates, sids, _stats = make_windows(df)
     tr, va, te = train_split(X_seq, X_static, y, dates)
 
     model = FloodGRU()
@@ -39,6 +39,7 @@ def main(data_path="data/processed/unified_daily.csv",
         p_te = model(torch.from_numpy(te[0]), torch.from_numpy(te[1])).numpy()
 
     results = {}
+    bundle = {}   # persisted for the inference API
     for k, h in enumerate(HORIZONS):
         iso = IsotonicRegression(out_of_bounds="clip")
         iso.fit(p_va[:, k], va[2][:, k])           # fit on validation only
@@ -62,9 +63,16 @@ def main(data_path="data/processed/unified_daily.csv",
             "test_tier_counts": {t: int((tier == i).sum())
                                  for i, t in enumerate(TIERS)},
         }
+        bundle[f"{24*h}h"] = {
+            "xs": [float(x) for x in iso.X_thresholds_],
+            "ys": [float(yv) for yv in iso.y_thresholds_],
+            "tiers": [float(x) for x in q],
+        }
         print(f"{24*h}h: brier {brier_raw:.4f} -> {brier_cal:.4f} | "
               f"alert F1 {f1_alert:.3f} | thresholds {np.round(q,3).tolist()}")
 
+    with open("data/processed/calibration.json", "w") as f:
+        json.dump(bundle, f)
     with open(out, "w") as f:
         json.dump(results, f, indent=2)
     print("calibration metrics →", out)

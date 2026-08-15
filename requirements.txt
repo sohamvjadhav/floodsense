@@ -3,3 +3,8 @@ numpy
 scikit-learn
 requests
 torch
+fastapi
+uvicorn[standard]
+sqlalchemy
+apscheduler
+httpx

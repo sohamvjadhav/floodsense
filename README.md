@@ -2,7 +2,7 @@
 
 Predicts district-level flood risk 24–72 hours in advance over the
 Godavari, Krishna, and Konkan basins, serving risk through a web dashboard
-and WhatsApp alerts. .
+and WhatsApp alerts.
 
 **Stack:** Python · PyTorch · FastAPI · SQLAlchemy · APScheduler · React 19 ·
 Vite · Tailwind v4 · Leaflet · Recharts · Twilio WhatsApp · Open-Meteo.

@@ -4,7 +4,7 @@ import {
   ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis,
 } from "recharts";
 import type { DistrictDetail as Detail } from "../api";
-import { fetchDistrict } from "../api";
+import { fetchDistrict, runScenario, type ScenarioResult } from "../api";
 import { tierHex, useChartTheme, useTheme, pct } from "../theme";
 
 const TIER_LABEL = ["Low", "Medium", "High", "Severe"];
@@ -46,6 +46,9 @@ export default function DistrictDetail({
 }) {
   const [data, setData] = useState<Detail | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [whatIf, setWhatIf] = useState(100);
+  const [scenario, setScenario] = useState<ScenarioResult | null>(null);
+  const [scBusy, setScBusy] = useState(false);
   const { theme } = useTheme();
   const hex = tierHex(theme === "dark");
   const { axis, grid, tooltipBg, tooltipBorder, tooltipFg } = useChartTheme();
@@ -53,12 +56,27 @@ export default function DistrictDetail({
   useEffect(() => {
     setData(null);
     setErr(null);
+    setScenario(null);
     let live = true;
     fetchDistrict(district)
       .then((d) => live && setData(d))
       .catch((e) => live && setErr(String(e)));
     return () => { live = false; };
   }, [district]);
+
+  // debounced what-if recompute
+  useEffect(() => {
+    if (!data) return;
+    let live = true;
+    setScBusy(true);
+    const t = window.setTimeout(() => {
+      runScenario(data.station_id, whatIf)
+        .then((r) => live && setScenario(r))
+        .catch(() => live && setScenario(null))
+        .finally(() => live && setScBusy(false));
+    }, 450);
+    return () => { live = false; window.clearTimeout(t); };
+  }, [data, whatIf]);
 
   if (err) {
     return (
@@ -120,6 +138,83 @@ export default function DistrictDetail({
           <span className="v">{data.station_id}</span></div>
         <div className="kv-row"><span className="k">updates</span>
           <span className="v">{data.risk_history.length}</span></div>
+      </div>
+
+      {data.drivers && (
+        <>
+          <h4 className="section-h">Why this risk</h4>
+          <div className="grid gap-1.5">
+            {[
+              { k: `rain last 24h · ${data.drivers.rain_24h}mm`, p: data.drivers.rain_24h_pctile },
+              { k: `rain last 7 days · ${data.drivers.rain_7d_mm}mm`, p: data.drivers.rain_7d_pctile },
+              { k: `upstream rain, 1d ago · ${data.drivers.upstream_rain_lag1}mm` },
+              { k: `upstream rain, 2d ago · ${data.drivers.upstream_rain_lag2}mm` },
+            ].map((row) => (
+              <div key={row.k} className="flex items-center gap-3 text-[12px]">
+                <span className="min-w-0 flex-1 truncate text-fg-muted">{row.k}</span>
+                {row.p !== undefined ? (
+                  <span className="score-bar" style={{ width: 150 }}>
+                    <span className="score-bar-track">
+                      <span className="score-bar-fill"
+                            style={{ width: `${Math.min(100, row.p)}%`,
+                                     background: row.p >= 90 ? hex[3] : row.p >= 75 ? hex[2] : hex[0] }} />
+                    </span>
+                    <span className="score-bar-val">{Math.round(row.p)}%</span>
+                  </span>
+                ) : (
+                  <span className="mono text-fg-subtle">—</span>
+                )}
+              </div>
+            ))}
+            <p className="text-[10.5px] leading-relaxed text-fg-subtle">
+              Percentiles compare against the same calendar month across the
+              5-year dataset — high percentile = unusual for the season, not
+              just large in absolute terms.
+            </p>
+          </div>
+        </>
+      )}
+
+      <h4 className="section-h">
+        What-if simulator — hypothetical rain tomorrow
+      </h4>
+      <div className="rounded-[var(--r-md)] border border-line bg-surface-2 p-3">
+        <div className="flex items-center gap-3">
+          <input
+            type="range" min={0} max={300} step={10}
+            value={whatIf}
+            onChange={(e) => setWhatIf(Number(e.target.value))}
+            aria-label="Hypothetical rainfall tomorrow, mm"
+            className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-surface-3
+                       accent-[var(--accent-400)]"
+          />
+          <span className="mono w-16 shrink-0 text-right text-sm font-semibold">
+            {scBusy ? "…" : `${whatIf}mm`}
+          </span>
+        </div>
+        {scenario && !scBusy && (
+          <div className="mt-2.5 grid grid-cols-3 gap-2">
+            {[["+24h", scenario.baseline.tier24, scenario.scenario.tier24, scenario.scenario.p24],
+              ["+48h", scenario.baseline.tier48, scenario.scenario.tier48, scenario.scenario.p48],
+              ["+72h", scenario.baseline.tier72, scenario.scenario.tier72, scenario.scenario.p72],
+            ].map(([h, from, to, p]) => (
+              <div key={h as string} className="rounded-md border border-line bg-surface px-2 py-1.5 text-center">
+                <p className="mono text-[10px] text-fg-subtle">{h}</p>
+                <div className="mt-1 flex items-center justify-center gap-1">
+                  <span className={`band ${BAND[from as number]}`}>{TIER_LABEL[from as number][0]}</span>
+                  <span className="text-fg-subtle">→</span>
+                  <span className={`band ${BAND[to as number]}`}>{TIER_LABEL[to as number][0]}</span>
+                </div>
+                <p className="mono mt-1 text-[10.5px] text-fg-muted">{pct(p as number, 0)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="mt-2 text-[10.5px] leading-relaxed text-fg-subtle">
+          The model window is extended by one hypothetical day with this much
+          rain; upstream lags hold at last-known values. A planning tool for
+          drills — not a forecast of that rain occurring.
+        </p>
       </div>
 
       <h4 className="section-h">Risk probability by lead time</h4>

@@ -250,3 +250,108 @@ def replay_events() -> list[dict]:
                 entry["peak_mm"] = round(float(peak["rainfall_mm"]), 1)
         out.append(entry)
     return out
+
+
+# ------------------------------------------------------ what-if + drivers --
+
+def _norm_helpers(stats: dict):
+    seq_mu = pd.Series(stats["seq_mu"], index=SEQ_FEATURES)
+    seq_sd = pd.Series(stats["seq_sd"], index=SEQ_FEATURES)
+    st_mu = pd.Series(stats["st_mu"], index=STATIC_FEATURES)
+    st_sd = pd.Series(stats["st_sd"], index=STATIC_FEATURES)
+    return seq_mu, seq_sd, st_mu, st_sd
+
+
+def _predict_rows(rows: pd.DataFrame, stat_row: pd.Series, model, stats, calib) -> dict:
+    """Predict from a prepared 7-row window + static row."""
+    seq_mu, seq_sd, st_mu, st_sd = _norm_helpers(stats)
+    seq = ((rows[SEQ_FEATURES] - seq_mu) / seq_sd).to_numpy(np.float32)
+    stat = ((stat_row.astype(float) - st_mu) / st_sd).to_numpy(np.float32)
+    x = torch.from_numpy(seq[None, ...]), torch.from_numpy(stat[None, ...])
+    with torch.no_grad():
+        p = model(*x).numpy()[0]
+    out = {}
+    for k, h in enumerate(HORIZONS):
+        c = calib[f"{24*h}h"]
+        p_cal = _isotonic_apply(float(p[k]), c["xs"], c["ys"])
+        out[f"p{24*h}"] = round(p_cal, 4)
+        out[f"tier{24*h}"] = int(np.digitize(p_cal, c["tiers"]))
+    return out
+
+
+def scenario(station_id: str, rain_mm: float) -> dict:
+    """What-if: append a hypothetical rainy day to the live window and
+    re-run the model — "if tomorrow rains X mm, how does risk move?"
+
+    The synthetic day reuses the last known upstream lags (future
+    upstream rain is unknowable) and assumes 12 rain-hours if wet.
+    """
+    from src.data.stations import STATION_BY_ID
+    if station_id not in STATION_BY_ID:
+        raise ValueError(f"unknown station: {station_id}")
+    rain_mm = max(0.0, min(400.0, float(rain_mm)))
+    df = fetch_live_daily()
+    model, stats, calib = load_bundle()
+    seq_mu, seq_sd, st_mu, st_sd = _norm_helpers(stats)
+
+    g = df[df["station_id"] == station_id].sort_values("date").reset_index(drop=True)
+    today = pd.Timestamp.now(tz="Asia/Kolkata").tz_localize(None).normalize()
+    end = int((g["date"] <= today).sum()) - 1
+    if end < 7:
+        raise ValueError("insufficient live history for scenario")
+
+    def _run(hypothetical_mm: float) -> dict:
+        last7 = g.loc[end - 6:end].copy()
+        prev = g.loc[end]
+        synthetic = {
+            "rainfall_mm": hypothetical_mm,
+            "rain_3d_mm": float(prev["rainfall_mm"]) + float(g.loc[end - 1]["rainfall_mm"])
+                          + hypothetical_mm,
+            "rain_7d_mm": float(last7["rainfall_mm"].sum()) - float(last7["rainfall_mm"].iloc[-1])
+                          + hypothetical_mm,
+            "precip_hours": 12.0 if hypothetical_mm > 0 else 0.0,
+            "up_rain_lag1": float(prev["up_rain_lag1"]),
+            "up_rain_lag2": float(prev["up_rain_lag1"]),  # last known upstream
+        }
+        window = pd.concat(
+            [last7.iloc[1:], pd.DataFrame([synthetic])], ignore_index=True)
+        window = window[SEQ_FEATURES]
+        res = _predict_rows(window, g.loc[0, STATIC_FEATURES], model, stats, calib)
+        res["assumed_rain_mm"] = hypothetical_mm
+        return res
+
+    return {
+        "station_id": station_id,
+        "district": STATION_BY_ID[station_id]["district"],
+        "as_of": str(g.loc[end, "date"].date()),
+        "baseline": _run(0.0),
+        "scenario": _run(rain_mm),
+    }
+
+
+def drivers(station_id: str, live_df: pd.DataFrame | None = None) -> dict:
+    """Why is this district flagged: current rainfall inputs ranked
+    against the same-calendar-month climatological distribution built
+    from the 5-year dataset. Descriptive statistics only — no claims
+    about the model's internal weights."""
+    if live_df is None:
+        live_df = fetch_live_daily()
+    g = live_df[live_df["station_id"] == station_id].sort_values("date")
+    today = pd.Timestamp.now(tz="Asia/Kolkata").tz_localize(None).normalize()
+    row = g[g["date"] <= today].iloc[-1]
+
+    hist = _history()
+    out = {
+        "rain_24h": round(float(row["rainfall_mm"]), 1),
+        "rain_7d_mm": round(float(row["rain_7d_mm"]), 1),
+        "upstream_rain_lag1": round(float(row["up_rain_lag1"]), 1),
+        "upstream_rain_lag2": round(float(row["up_rain_lag2"]), 1),
+    }
+    if hist is not None:
+        month = row["date"].month
+        same_month = hist[hist["date"].dt.month == month]
+        for key, col in (("rain_24h_pctile", "rainfall_mm"), ("rain_7d_pctile", "rain_7d_mm")):
+            dist = same_month[col].dropna()
+            if len(dist) > 30:
+                out[key] = round(float((dist <= float(row[col])).mean() * 100), 1)
+    return out

@@ -19,7 +19,9 @@ from sqlalchemy import select, func
 
 from .alerts import TIER_NAMES
 from .db import RiskState, SessionLocal, Subscription
-from .inference import fetch_live_daily, replay as replay_inference, replay_events
+from .inference import (fetch_live_daily, drivers as inference_drivers,
+                        replay as replay_inference, replay_events,
+                        scenario as run_scenario)
 from .live import REFRESH_HOURS, run_cycle
 from src.data.stations import STATIONS, STATION_BY_ID
 
@@ -204,10 +206,15 @@ def risk_district(district: str):
     rain = [{"date": str(d.date()), "rainfall_mm": (0.0 if isnan(v) else round(v, 1)),
              "forecast": str(d.date()) > latest.as_of}
             for d, v in zip(g["date"], g["rainfall_mm"])]
+    try:
+        drv = inference_drivers(station["station_id"], outlook)
+    except Exception:  # noqa: BLE001 — drivers are supplementary
+        drv = None
     return {
         "district": station["district"], "station_id": station["station_id"],
         "basin": station["basin"],
         "as_of": latest.as_of,
+        "drivers": drv,
         "risk": {"p24": latest.p24, "p48": latest.p48, "p72": latest.p72,
                  "tier24": latest.tier24, "tier48": latest.tier48,
                  "tier72": latest.tier72,
@@ -241,6 +248,26 @@ def subscribe(body: SubscribeIn):
         db.commit()
     return {"ok": True, "phone": body.phone, "district": body.district,
             "channel": "whatsapp"}
+
+
+class ScenarioIn(BaseModel):
+    station_id: str
+    rain_mm: float
+
+    @field_validator("rain_mm")
+    @classmethod
+    def sane(cls, v: float) -> float:
+        if not 0 <= v <= 400:
+            raise ValueError("rain_mm must be within 0..400")
+        return v
+
+
+@app.post("/api/risk/scenario")
+def risk_scenario(body: ScenarioIn):
+    try:
+        return run_scenario(body.station_id, body.rain_mm)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
 
 
 @app.get("/api/stations/{station_id}/history")

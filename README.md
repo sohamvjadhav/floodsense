@@ -62,10 +62,17 @@ VITE_API_URL=http://localhost:8000 npm run build        # production build
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/risk/map` | all districts: tier, color, 24/48/72h probabilities |
-| `GET /api/risk/{district}` | probability curve, rainfall + forecast outlook, risk history |
+| `GET /api/risk/{district}` | probability curve, rainfall + forecast outlook, risk history, why-this-risk drivers |
 | `POST /api/alerts/subscribe` | `{phone, district}` → WhatsApp subscription (Indian E.164 validated) |
 | `GET /api/stations/{id}/history` | recent readings for detail charts |
 | `POST /api/cron/run` | run one live cycle now (fetch → infer → alert check) |
+| `GET /api/risk/replay?date=` | historical time-travel: model runs on prior 7 days only, observed rainfall per district |
+| `GET /api/risk/replay/events` | curated flood-day presets for the demo (Palghar 2026 deluge, Kolhapur 2024 onset…) |
+| `POST /api/risk/scenario` | `{station_id, rain_mm}` what-if: one hypothetical rainy day appended, model re-run (drill planning) |
+
+**Why-this-risk drivers**: current 24h/7d rainfall and upstream lags ranked
+against same-calendar-month climatological percentiles from the 5-year
+dataset — explains flags without claiming anything about model internals.
 
 ## Train the sequence model
 

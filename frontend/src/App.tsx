@@ -148,51 +148,53 @@ export default function App() {
           <div className="kpis anim-in">
             <div className="kpi">
               <span className="kpi-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z" /><path d="M9 3v15M15 6v15" />
                 </svg>
               </span>
-              <span className="kpi-value">{districts.length}</span>
-              <span className="kpi-label">Districts monitored</span>
-              <span className="kpi-sub">3 basins · Census 2011 exposure base</span>
+              <span className="kpi-main">
+                <span className="kpi-value">{districts.length}</span>
+                <span className="kpi-label">districts · 3 basins</span>
+              </span>
             </div>
             <div className={`kpi ${exposure.n > 0 ? "kpi-warn" : ""}`}>
               <span className="kpi-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M10.3 3.9 2.5 18a1.8 1.8 0 0 0 1.6 2.7h15.8a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.8 1.8 0 0 0-3.4 0Z" />
                   <path d="M12 9v4m0 3.5v.5" />
                 </svg>
               </span>
-              <span className="kpi-value">{exposure.n}</span>
-              <span className="kpi-label">At High+ risk (+{horizon}h)</span>
-              <span className="kpi-sub">
-                {exposure.n ? `${compactIn.format(exposure.pop)} people in alert districts` : "no districts above High"}
+              <span className="kpi-main">
+                <span className="kpi-value">{exposure.n}</span>
+                <span className="kpi-label">at High+ risk (+{horizon}h)</span>
               </span>
             </div>
             <div className={`kpi ${exposure.pop > 0 ? "kpi-warn" : ""}`}>
               <span className="kpi-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
                   <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
               </span>
-              <span className="kpi-value">{compactIn.format(exposure.pop)}</span>
-              <span className="kpi-label">Population exposed</span>
-              <span className="kpi-sub">of {compactIn.format(popTotal)} monitored</span>
+              <span className="kpi-main">
+                <span className="kpi-value">{compactIn.format(exposure.pop)}</span>
+                <span className="kpi-label">exposed of {compactIn.format(popTotal)}</span>
+              </span>
             </div>
             <div className="kpi">
               <span className="kpi-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
                 </svg>
               </span>
-              <span className="kpi-value">+72h</span>
-              <span className="kpi-label">Forecast window</span>
-              <span className="kpi-sub">{updatedAt ? `updated ${timeAgo(updatedAt)}` : ""}</span>
+              <span className="kpi-main">
+                <span className="kpi-value">+72h</span>
+                <span className="kpi-label">forecast window</span>
+              </span>
             </div>
           </div>
         </div>

@@ -211,7 +211,7 @@ export default function MapView({
                   weight: isSel ? 2.5 : 1.5,
                   opacity: 0.95,
                   fillColor: "#FFFFFF",
-                  fillOpacity: 0.92,
+                  fillOpacity: 0.38,
                 }}
               />
               <CircleMarker
@@ -220,10 +220,10 @@ export default function MapView({
                 radius={r}
                 pathOptions={{
                   color: hex[tier],
-                  weight: alerting ? 2 : 1.2,
+                  weight: alerting ? 2 : 1.4,
                   className: alerting ? "marker-pulse" : undefined,
                   fillColor: hex[tier],
-                  fillOpacity: 0.92,
+                  fillOpacity: 0.6,
                 }}
                 eventHandlers={{ click: () => onSelect(d.district) }}
               >

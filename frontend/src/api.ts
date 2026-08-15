@@ -7,13 +7,23 @@ export interface DistrictRisk {
   basin: string;
   lat: number;
   lon: number;
+  population: number;
   tier: number;
   tier_name: string;
+  tiers: [number, number, number];
   color: string;
   p24: number;
   p48: number;
   p72: number;
   as_of: string | null;
+  source: string;
+}
+
+export interface ImpactSummary {
+  horizon: number;
+  population_total: number;
+  population_alerting: number;
+  districts_alerting: number;
 }
 
 export interface DistrictDetail {
@@ -37,7 +47,9 @@ async function get<T>(path: string): Promise<T> {
 }
 
 export const fetchMap = () =>
-  get<{ districts: DistrictRisk[]; legend: [string, string][] }>("/api/risk/map");
+  get<{ districts: DistrictRisk[]; legend: [string, string][]; impact: ImpactSummary }>(
+    "/api/risk/map",
+  );
 
 export const fetchDistrict = (district: string) =>
   get<DistrictDetail>(`/api/risk/${encodeURIComponent(district)}`);

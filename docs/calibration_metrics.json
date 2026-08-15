@@ -1,50 +1,50 @@
 {
   "24h": {
-    "brier_raw": 0.00413,
-    "brier_calibrated": 0.00419,
+    "brier_raw": 0.00392,
+    "brier_calibrated": 0.00398,
     "tier_thresholds": [
-      0.0041,
-      0.0526,
-      1.0
+      0.0066,
+      0.1163,
+      0.5
     ],
-    "alert_f1_High+Severe": 0.6579,
+    "alert_f1_High+Severe": 0.6933,
     "test_tier_counts": {
-      "Low": 3853,
-      "Medium": 132,
-      "High": 83,
-      "Severe": 18
+      "Low": 3869,
+      "Medium": 120,
+      "High": 67,
+      "Severe": 30
     }
   },
   "48h": {
-    "brier_raw": 0.00666,
-    "brier_calibrated": 0.00705,
+    "brier_raw": 0.00619,
+    "brier_calibrated": 0.00659,
     "tier_thresholds": [
-      0.0214,
-      0.0926,
-      1.0
+      0.0217,
+      0.0909,
+      0.5
     ],
-    "alert_f1_High+Severe": 0.64,
+    "alert_f1_High+Severe": 0.7024,
     "test_tier_counts": {
-      "Low": 3824,
-      "Medium": 154,
-      "High": 89,
-      "Severe": 19
+      "Low": 3879,
+      "Medium": 108,
+      "High": 55,
+      "Severe": 44
     }
   },
   "72h": {
-    "brier_raw": 0.01028,
-    "brier_calibrated": 0.01043,
+    "brier_raw": 0.00967,
+    "brier_calibrated": 0.01036,
     "tier_thresholds": [
-      0.0311,
-      0.1077,
-      1.0
+      0.036,
+      0.15,
+      0.6667
     ],
-    "alert_f1_High+Severe": 0.625,
+    "alert_f1_High+Severe": 0.6893,
     "test_tier_counts": {
-      "Low": 3864,
-      "Medium": 113,
-      "High": 91,
-      "Severe": 18
+      "Low": 3896,
+      "Medium": 98,
+      "High": 71,
+      "Severe": 21
     }
   }
 }

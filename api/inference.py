@@ -80,12 +80,54 @@ def fetch_live_daily(past_days: int = 10, forecast_days: int = 4) -> pd.DataFram
     return df
 
 
+def _fallback_tiers(df: pd.DataFrame) -> dict:
+    """IMD rainfall-threshold tiers when the model path is unavailable.
+
+    Degraded mode so the API (and the live demo) never dies: severity from
+    the last observed day's rainfall against IMD 24h classes plus 3-day
+    accumulation. Entries are marked source="fallback".
+    """
+    today = pd.Timestamp.now(tz="Asia/Kolkata").tz_localize(None).normalize()
+    out = {}
+    for sid, g in df.groupby("station_id"):
+        g = g.sort_values("date").reset_index(drop=True)
+        end = int((g["date"] <= today).sum()) - 1
+        if end < 0:
+            continue
+        row = g.iloc[end]
+        r24, r3 = float(row["rainfall_mm"]), float(row["rain_3d_mm"])
+        tier = (3 if (r24 >= 204 or r3 >= 300)
+                else 2 if (r24 >= 115 or r3 >= 200)
+                else 1 if (r24 >= 64.4 or r3 >= 100)
+                else 0)
+        entry = {"district": row["district"], "station_id": sid,
+                 "as_of": str(row["date"].date()), "source": "fallback"}
+        for h in HORIZONS:
+            entry[f"p{24*h}"] = round(min(1.0, (r24 + r3) / 300.0), 3)
+            entry[f"tier{24*h}"] = tier
+        out[sid] = entry
+    return out
+
+
 def predict_all(past_days: int = 10, forecast_days: int = 4) -> dict:
     """Return per-station calibrated probabilities + tiers for the window
     ending at the last OBSERVED day (forecast rain reserved for the
-    dashboard's rainfall outlook, not fed to the model)."""
-    model, stats, calib = load_bundle()
+    dashboard's rainfall outlook, not fed to the model).
+
+    Falls back to IMD rainfall thresholds if the model bundle or
+    prediction fails — entries then carry source="fallback".
+    """
     df = fetch_live_daily(past_days, forecast_days)
+    try:
+        return _predict_with_model(df)
+    except Exception as e:  # noqa: BLE001 — degrade, never die
+        print(f"[inference] model path failed ({type(e).__name__}: {e}); "
+              f"using rainfall-threshold fallback")
+        return _fallback_tiers(df)
+
+
+def _predict_with_model(df: pd.DataFrame) -> dict:
+    model, stats, calib = load_bundle()
 
     seq_mu = pd.Series(stats["seq_mu"], index=SEQ_FEATURES)
     seq_sd = pd.Series(stats["seq_sd"], index=SEQ_FEATURES)
@@ -109,7 +151,7 @@ def predict_all(past_days: int = 10, forecast_days: int = 4) -> dict:
             p = model(*x).numpy()[0]
 
         entry = {"district": g.loc[0, "district"], "station_id": sid,
-                 "as_of": str(g.loc[end, "date"].date())}
+                 "as_of": str(g.loc[end, "date"].date()), "source": "model"}
         for k, h in enumerate(HORIZONS):
             c = calib[f"{24*h}h"]
             p_cal = _isotonic_apply(float(p[k]), c["xs"], c["ys"])

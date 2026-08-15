@@ -79,23 +79,44 @@ def health():
 
 
 @app.get("/api/risk/map")
-def risk_map():
+def risk_map(horizon: int = 24):
+    if horizon not in (24, 48, 72):
+        raise HTTPException(422, "horizon must be 24, 48, or 72")
     with SessionLocal() as db:
         state = _latest_state(db)
     out = []
+    pop_alerting = 0
+    pop_total = 0
     for s in STATIONS:
         r = state.get(s["station_id"])
+        tiers = [r.tier24 if r else 0, r.tier48 if r else 0, r.tier72 if r else 0]
+        tier = tiers[(horizon // 24) - 1]
+        pop_total += s["population"]
+        if tier >= 2:
+            pop_alerting += s["population"]
         out.append({
             "station_id": s["station_id"], "district": s["district"],
             "basin": s["basin"], "lat": s["lat"], "lon": s["lon"],
-            "tier": r.tier24 if r else 0,
-            "tier_name": TIER_NAMES[r.tier24] if r else "Low",
-            "color": TIER_COLORS[r.tier24] if r else TIER_COLORS[0],
+            "population": s["population"],
+            "tier": tier,
+            "tier_name": TIER_NAMES[tier],
+            "tiers": tiers,
+            "color": TIER_COLORS[tier],
             "p24": r.p24 if r else 0.0, "p48": r.p48 if r else 0.0,
             "p72": r.p72 if r else 0.0,
             "as_of": r.as_of if r else None,
+            "source": getattr(r, "source", "model") if r else "model",
         })
-    return {"districts": out, "legend": list(zip(TIER_NAMES, TIER_COLORS))}
+    return {
+        "districts": out,
+        "legend": list(zip(TIER_NAMES, TIER_COLORS)),
+        "impact": {
+            "horizon": horizon,
+            "population_total": pop_total,
+            "population_alerting": pop_alerting,
+            "districts_alerting": sum(1 for d in out if d["tier"] >= 2),
+        },
+    }
 
 
 @app.get("/api/risk/{district}")

@@ -1,6 +1,7 @@
 import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip } from "react-leaflet";
 import type { DistrictRisk } from "../api";
 import { tierHex, useTheme, pct } from "../theme";
+import type { Horizon } from "../horizon";
 
 const CENTER: [number, number] = [18.3, 75.4];
 
@@ -13,16 +14,54 @@ const TILES = {
 const ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
+function HorizonScrubber({
+  horizon, onChange,
+}: {
+  horizon: Horizon;
+  onChange: (h: Horizon) => void;
+}) {
+  return (
+    <div className="absolute left-1/2 top-3 z-[1000] -translate-x-1/2">
+      <div
+        role="tablist"
+        aria-label="Forecast horizon"
+        className="flex items-center gap-0.5 rounded-full border border-line
+                   bg-surface/95 p-1 shadow-sm backdrop-blur"
+      >
+        {[24, 48, 72].map((h) => (
+          <button
+            key={h}
+            role="tab"
+            aria-selected={horizon === h}
+            onClick={() => onChange(h as Horizon)}
+            className={`rounded-full px-3 py-1 text-[11px] font-bold transition-colors
+                        focus-visible:outline-none focus-visible:ring-2
+                        focus-visible:ring-accent/60
+                        ${horizon === h
+                          ? "bg-accent text-accent-fg"
+                          : "text-fg-muted hover:text-fg"}`}
+          >
+            +{h}h
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function MapView({
-  districts, selected, onSelect,
+  districts, selected, onSelect, horizon, onHorizonChange,
 }: {
   districts: DistrictRisk[];
   selected: string | null;
   onSelect: (d: string) => void;
+  horizon: Horizon;
+  onHorizonChange: (h: Horizon) => void;
 }) {
   const { theme } = useTheme();
   const dark = theme === "dark";
   const hex = tierHex(dark);
+  const idx = horizon / 24 - 1;
 
   return (
     <div className="relative h-[480px] overflow-hidden rounded-2xl border border-line
@@ -36,24 +75,25 @@ export default function MapView({
       >
         <TileLayer key={theme} attribution={ATTRIBUTION} url={TILES[theme]} />
         {districts.map((d) => {
-          const alerting = d.tier >= 2;
+          const tier = d.tiers[idx];
+          const alerting = tier >= 2;
           return (
             <CircleMarker
               key={d.station_id}
               center={[d.lat, d.lon]}
-              radius={9 + d.tier * 2.5}
+              radius={9 + tier * 2.5}
               pathOptions={{
-                color: hex[d.tier],
+                color: hex[tier],
                 weight: d.district === selected ? 2.5 : 1.5,
                 className: alerting ? "marker-pulse" : undefined,
-                fillColor: hex[d.tier],
+                fillColor: hex[tier],
                 fillOpacity: d.district === selected ? 0.75 : 0.45,
               }}
               eventHandlers={{ click: () => onSelect(d.district) }}
             >
               <Tooltip direction="top" offset={[0, -10]} opacity={1}>
                 <span className="text-xs font-semibold">{d.district}</span>
-                <span className="text-xs text-fg-muted"> · {d.tier_name}</span>
+                <span className="text-xs text-fg-muted"> · {TIER_LABEL[tier]}</span>
               </Tooltip>
               <Popup>
                 <div className="min-w-[190px] font-sans">
@@ -63,9 +103,11 @@ export default function MapView({
                   </p>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="inline-block h-2.5 w-2.5 rounded-full"
-                          style={{ background: hex[d.tier] }} />
-                    <span className="text-sm font-semibold"
-                          style={{ color: hex[d.tier] }}>{d.tier_name}</span>
+                          style={{ background: hex[tier] }} />
+                    <span className="text-sm font-semibold" style={{ color: hex[tier] }}>
+                      {TIER_LABEL[tier]}
+                    </span>
+                    <span className="text-[10px] text-fg-subtle">at +{horizon}h</span>
                   </div>
                   <div className="mt-2 grid grid-cols-3 gap-2 text-center">
                     {[["24h", d.p24], ["48h", d.p48], ["72h", d.p72]].map(([h, p]) => (
@@ -90,12 +132,14 @@ export default function MapView({
         })}
       </MapContainer>
 
+      <HorizonScrubber horizon={horizon} onChange={onHorizonChange} />
+
       {/* legend overlay */}
       <div className="pointer-events-none absolute bottom-3 left-3 z-[500]
                       rounded-xl border border-line bg-surface/90 px-3 py-2.5
                       backdrop-blur-sm">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-fg-subtle">
-          Risk tier
+          Risk at +{horizon}h
         </p>
         <div className="mt-1.5 space-y-1">
           {["Low", "Medium", "High", "Severe"].map((name, i) => (
@@ -109,3 +153,5 @@ export default function MapView({
     </div>
   );
 }
+
+const TIER_LABEL = ["Low", "Medium", "High", "Severe"];

@@ -47,6 +47,7 @@ class RiskState(Base):
     tier24 = Column(Integer, nullable=False)
     tier48 = Column(Integer, nullable=False)
     tier72 = Column(Integer, nullable=False)
+    source = Column(String, default="model")   # "model" | "fallback"
     updated_at = Column(DateTime, default=utcnow)
 
 

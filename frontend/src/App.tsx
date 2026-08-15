@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DistrictRisk } from "./api";
+import type { DistrictRisk, ImpactSummary } from "./api";
 import { fetchMap } from "./api";
 import { TIER_STYLES, pct } from "./theme";
+import type { Horizon } from "./horizon";
 import MapView from "./components/MapView";
 import DistrictDetail from "./components/DistrictDetail";
 import DistrictList from "./components/DistrictList";
 import SubscribeForm from "./components/SubscribeForm";
 import ThemeToggle from "./components/ThemeToggle";
 import { Card, ErrorState, SkeletonBlock } from "./components/States";
+
+const compactIn = new Intl.NumberFormat("en-IN", {
+  notation: "compact", compactDisplay: "short",
+});
 
 function BrandMark() {
   return (
@@ -33,6 +38,7 @@ function timeAgo(iso: string | null): string {
 
 export default function App() {
   const [districts, setDistricts] = useState<DistrictRisk[]>([]);
+  const [horizon, setHorizon] = useState<Horizon>(24);
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,10 +67,22 @@ export default function App() {
   }, [load]);
 
   const live = !error && districts.length > 0;
+  const hIdx = horizon / 24 - 1;
   const worst = districts.length
-    ? [...districts].sort((a, b) => b.tier - a.tier || b.p24 - a.p24)[0]
+    ? [...districts].sort((a, b) => b.tiers[hIdx] - a.tiers[hIdx] || b.p24 - a.p24)[0]
     : null;
-  const alerting = worst && worst.tier >= 2;
+  const alerting = worst && worst.tiers[hIdx] >= 2;
+
+  // exposure at the selected horizon, recomputed client-side so the
+  // scrubber updates it instantly without a refetch
+  const exposure = districts.reduce(
+    (acc, d) => {
+      if (d.tiers[hIdx] >= 2) { acc.pop += d.population; acc.n += 1; }
+      return acc;
+    },
+    { pop: 0, n: 0 },
+  );
+  const popTotal = districts.reduce((s, d) => s + d.population, 0);
 
   return (
     <div className="flex min-h-screen flex-col">

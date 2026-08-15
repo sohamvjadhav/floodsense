@@ -47,6 +47,7 @@ def run_cycle() -> dict:
                 station_id=sid, district=e["district"], as_of=e["as_of"],
                 p24=e["p24"], p48=e["p48"], p72=e["p72"],
                 tier24=e["tier24"], tier48=e["tier48"], tier72=e["tier72"],
+                source=e.get("source", "model"),
             ))
         db.commit()
 

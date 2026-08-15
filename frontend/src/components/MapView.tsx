@@ -196,20 +196,37 @@ export default function MapView({
           const tier = d.tiers[idx];
           const alerting = tier >= 2;
           const isSel = d.district === selected;
+          const r = 8.5 + touchBoost + tier * 2.5;
           return (
-            <CircleMarker
-              key={d.station_id}
-              center={[d.lat, d.lon]}
-              radius={9 + touchBoost + tier * 2.5}
-              pathOptions={{
-                color: isSel ? "#FFFFFF" : hex[tier],
-                weight: isSel ? 2.5 : base === "satellite" ? 2 : 1.5,
-                className: alerting ? "marker-pulse" : undefined,
-                fillColor: hex[tier],
-                fillOpacity: isSel ? 0.8 : 0.55,
-              }}
-              eventHandlers={{ click: () => onSelect(d.district) }}
-            >
+            <>
+              {/* white halo disc underneath: hard contrast edge on any
+                  basemap, especially busy satellite imagery */}
+              <CircleMarker
+                key={`${d.station_id}-halo`}
+                center={[d.lat, d.lon]}
+                radius={r + (isSel ? 3.2 : 2.2)}
+                interactive={false}
+                pathOptions={{
+                  color: "#FFFFFF",
+                  weight: isSel ? 2.5 : 1.5,
+                  opacity: 0.95,
+                  fillColor: "#FFFFFF",
+                  fillOpacity: 0.92,
+                }}
+              />
+              <CircleMarker
+                key={d.station_id}
+                center={[d.lat, d.lon]}
+                radius={r}
+                pathOptions={{
+                  color: hex[tier],
+                  weight: alerting ? 2 : 1.2,
+                  className: alerting ? "marker-pulse" : undefined,
+                  fillColor: hex[tier],
+                  fillOpacity: 0.92,
+                }}
+                eventHandlers={{ click: () => onSelect(d.district) }}
+              >
               <Tooltip direction="top" offset={[0, -10]} opacity={1}>
                 <span className="font-semibold">{d.district}</span>
                 <span className="text-fg-subtle"> · {TIER_LABEL[tier]}</span>
@@ -244,7 +261,8 @@ export default function MapView({
                   </button>
                 </div>
               </Popup>
-            </CircleMarker>
+              </CircleMarker>
+            </>
           );
         })}
       </MapContainer>

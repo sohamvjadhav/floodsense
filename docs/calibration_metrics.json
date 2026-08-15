@@ -1,0 +1,50 @@
+{
+  "24h": {
+    "brier_raw": 0.00413,
+    "brier_calibrated": 0.00419,
+    "tier_thresholds": [
+      0.0041,
+      0.0526,
+      1.0
+    ],
+    "alert_f1_High+Severe": 0.6579,
+    "test_tier_counts": {
+      "Low": 3853,
+      "Medium": 132,
+      "High": 83,
+      "Severe": 18
+    }
+  },
+  "48h": {
+    "brier_raw": 0.00666,
+    "brier_calibrated": 0.00705,
+    "tier_thresholds": [
+      0.0214,
+      0.0926,
+      1.0
+    ],
+    "alert_f1_High+Severe": 0.64,
+    "test_tier_counts": {
+      "Low": 3824,
+      "Medium": 154,
+      "High": 89,
+      "Severe": 19
+    }
+  },
+  "72h": {
+    "brier_raw": 0.01028,
+    "brier_calibrated": 0.01043,
+    "tier_thresholds": [
+      0.0311,
+      0.1077,
+      1.0
+    ],
+    "alert_f1_High+Severe": 0.625,
+    "test_tier_counts": {
+      "Low": 3864,
+      "Medium": 113,
+      "High": 91,
+      "Severe": 18
+    }
+  }
+}

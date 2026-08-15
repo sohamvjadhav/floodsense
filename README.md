@@ -27,7 +27,7 @@ docs/                          # metrics JSON, report drafts
 - [x] Phase 1 — unified schema, station registry, adjacency table, 5yr dataset (27,390 station-days)
 - [x] Phase 2 — baseline stacking classifier evaluated on time-based split
 - [x] Phase 3 — GRU sequence model, multi-horizon 24/48/72h, upstream-lag features (see `docs/ablation.md`)
-- [ ] Phase 4 — probability calibration (isotonic/Platt) + risk tiers
+- [x] Phase 4 — isotonic calibration + Low/Medium/High/Severe risk tiers (`docs/calibration_metrics.json`)
 - [ ] Phase 5 — Laravel backend + FastAPI inference microservice
 - [ ] Phase 5 — Laravel backend + FastAPI inference microservice
 - [ ] Phase 6 — React/Leaflet dashboard → Cloudflare Pages

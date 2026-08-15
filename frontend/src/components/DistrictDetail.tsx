@@ -1,11 +1,21 @@
 import { useEffect, useState } from "react";
 import {
-  Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer,
-  Tooltip as ChartTooltip, XAxis, YAxis,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ReferenceLine,
+  ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis,
 } from "recharts";
-import { DistrictDetail as Detail, fetchDistrict } from "../api";
+import type { DistrictDetail as Detail } from "../api";
+import { fetchDistrict } from "../api";
+import { TIER_STYLES, pct, useChartTheme } from "../theme";
+import { Card, DetailSkeleton, ErrorState } from "./States";
 
-const TIER_COLOR = ["#22c55e", "#eab308", "#f97316", "#dc2626"];
+const TIER_HEX = ["#059669", "#b45309", "#ea580c", "#dc2626"];
+const TIER_HEX_DARK = ["#34d399", "#fbbf24", "#fb923c", "#f87171"];
+const TIER_GUIDANCE = [
+  "No action needed — conditions are within normal range.",
+  "Monitor updates; avoid waterlogged routes and riverbank walks.",
+  "Prepare: move vehicles and valuables to higher ground; stay clear of rivers.",
+  "EVACUATE low-lying areas now and follow official instructions.",
+];
 
 export default function DistrictDetail({
   district, onClose,
@@ -15,86 +25,143 @@ export default function DistrictDetail({
 }) {
   const [data, setData] = useState<Detail | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const { dark, axis, grid, tooltipBg, tooltipBorder, tooltipFg } = useChartTheme();
+  const tierHexArr = dark ? TIER_HEX_DARK : TIER_HEX;
 
   useEffect(() => {
-    setData(null); setErr(null);
-    fetchDistrict(district).then(setData).catch((e) => setErr(String(e)));
+    setData(null);
+    setErr(null);
+    let live = true;
+    fetchDistrict(district)
+      .then((d) => live && setData(d))
+      .catch((e) => live && setErr(String(e)));
+    return () => { live = false; };
   }, [district]);
 
+  if (err) return <ErrorState message="Couldn't load district details" hint={err} />;
+  if (!data) return <DetailSkeleton />;
+
+  const s = TIER_STYLES[data.risk.tier24];
+  const guidance = TIER_GUIDANCE[data.risk.tier24];
+  const tooltipStyle = {
+    background: tooltipBg,
+    border: `1px solid ${tooltipBorder}`,
+    borderRadius: 10,
+    color: tooltipFg,
+    fontSize: 12,
+    boxShadow: dark ? "0 8px 24px rgba(0,0,0,.5)" : "0 8px 24px rgba(16,24,40,.12)",
+  };
+
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 overflow-y-auto max-h-[70vh]">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h2 className="text-base font-bold">{district}</h2>
-          {data && (
-            <p className="text-xs text-slate-400">
-              {data.basin} basin · window as of {data.as_of}
+    <Card className="anim-in overflow-hidden">
+      <div className={`border-b border-line px-5 py-4 ${s.soft}`}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="truncate text-[15px] font-bold tracking-tight">{data.district}</h2>
+            <p className="mt-0.5 text-[11px] uppercase tracking-wide text-fg-muted">
+              {data.basin} basin · as of {data.as_of}
             </p>
-          )}
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close details"
+            className="-mr-1 -mt-1 rounded-lg p-1.5 text-fg-subtle
+                       hover:bg-surface hover:text-fg
+                       focus-visible:outline-none focus-visible:ring-2
+                       focus-visible:ring-accent/60 transition-colors"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2" strokeLinecap="round">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
         </div>
-        <button onClick={onClose}
-                className="text-slate-400 hover:text-slate-200 text-lg leading-none px-1">×</button>
+        <div className="mt-3 flex items-center gap-2.5">
+          <span className={`rounded-lg border px-2.5 py-1 text-xs font-bold ${s.soft} ${s.fg}`}>
+            {data.risk.tier_name.toUpperCase()}
+          </span>
+          <span className="num text-xs text-fg-muted">
+            24h risk <span className="font-semibold text-fg">{pct(data.risk.p24)}</span>
+          </span>
+        </div>
       </div>
 
-      {err && <p className="mt-4 text-sm text-red-300">{err}</p>}
-      {!data && !err && <p className="mt-4 text-sm text-slate-400">Loading…</p>}
+      <div className="px-5 py-4">
+        <p className={`rounded-lg border px-3 py-2 text-xs leading-relaxed ${s.soft} ${s.fg}`}>
+          <span className="font-semibold">What to do: </span>{guidance}
+        </p>
 
-      {data && (
-        <>
-          <div className="mt-4 flex items-center gap-3">
-            <span className="rounded-md px-2.5 py-1 text-sm font-semibold text-slate-950"
-                  style={{ background: TIER_COLOR[data.risk.tier24] }}>
-              {data.risk.tier_name}
-            </span>
-            <span className="text-xs text-slate-400">
-              24h flood risk {(data.risk.p24 * 100).toFixed(1)}%
-            </span>
-          </div>
+        <h3 className="mt-5 text-[11px] font-bold uppercase tracking-wider text-fg-subtle">
+          Risk probability by lead time
+        </h3>
+        <ResponsiveContainer width="100%" height={170}>
+          <BarChart data={data.probability_curve} margin={{ top: 12, right: 4, left: -14, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
+            <XAxis dataKey="horizon_h" tickFormatter={(h) => `+${h}h`}
+                   tick={{ fill: axis, fontSize: 11 }} axisLine={{ stroke: grid }}
+                   tickLine={false} />
+            <YAxis tickFormatter={(p) => `${Math.round(p * 100)}%`}
+                   tick={{ fill: axis, fontSize: 11 }} axisLine={false} tickLine={false} />
+            <ChartTooltip contentStyle={tooltipStyle} cursor={{ fill: grid, opacity: 0.4 }}
+                          formatter={(v: number) => [pct(v), "risk"]} labelFormatter={(h) => `${h} ahead`} />
+            <Bar dataKey="p" radius={[5, 5, 0, 0]} maxBarSize={44}>
+              {data.probability_curve.map((c) => (
+                <Cell key={c.horizon_h} fill={tierHexArr[c.tier]} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
 
-          <h3 className="mt-5 mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Risk probability by lead time
-          </h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={data.probability_curve}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="horizon_h"
-                     tickFormatter={(h) => `${h}h`}
-                     tick={{ fill: "#94a3b8", fontSize: 12 }} />
-              <YAxis tickFormatter={(p) => `${(p * 100).toFixed(0)}%`}
-                     tick={{ fill: "#94a3b8", fontSize: 12 }} />
-              <ChartTooltip formatter={(v: number) => `${(v * 100).toFixed(1)}%`} />
-              <Bar dataKey="p" radius={[4, 4, 0, 0]}>
-                {data.probability_curve.map((c) => (
-                  <Cell key={c.horizon_h} fill={TIER_COLOR[c.tier]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+        <h3 className="mt-5 text-[11px] font-bold uppercase tracking-wider text-fg-subtle">
+          Rainfall — observed & outlook
+        </h3>
+        <ResponsiveContainer width="100%" height={150}>
+          <BarChart data={data.rainfall_recent} margin={{ top: 12, right: 4, left: -14, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={grid} vertical={false} />
+            <XAxis dataKey="date" tickFormatter={(d) => d.slice(5)}
+                   tick={{ fill: axis, fontSize: 10 }} axisLine={{ stroke: grid }}
+                   tickLine={false} interval="preserveStartEnd" />
+            <YAxis tick={{ fill: axis, fontSize: 11 }} axisLine={false} tickLine={false}
+                   unit="mm" width={44} />
+            <ChartTooltip contentStyle={tooltipStyle} cursor={{ fill: grid, opacity: 0.4 }}
+                          formatter={(v: number) => [`${v} mm`, "rainfall"]}
+                          labelFormatter={(d) => `day ${d.slice(5)}`} />
+            <ReferenceLine x={data.as_of} stroke={axis} strokeDasharray="4 2" />
+            <Bar dataKey="rainfall_mm" radius={[3, 3, 0, 0]}>
+              {data.rainfall_recent.map((r) => (
+                <Cell key={r.date} fill={r.forecast ? (dark ? "#818cf8" : "#6366f1") : (dark ? "#38bdf8" : "#0284c7")} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+        <div className="mt-2 flex items-center gap-4 text-[11px] text-fg-subtle">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-[3px]" style={{ background: dark ? "#38bdf8" : "#0284c7" }} />
+            observed (model input)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-[3px]" style={{ background: dark ? "#818cf8" : "#6366f1" }} />
+            forecast (outlook only)
+          </span>
+        </div>
 
-          <h3 className="mt-5 mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Rainfall — observed & forecast (mm/day)
-          </h3>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={data.rainfall_recent}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="date"
-                     tickFormatter={(d) => d.slice(5)}
-                     tick={{ fill: "#94a3b8", fontSize: 11 }} />
-              <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} />
-              <ChartTooltip />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="rainfall_mm" name="rainfall (mm)" radius={[3, 3, 0, 0]}>
-                {data.rainfall_recent.map((r) => (
-                  <Cell key={r.date} fill={r.forecast ? "#6366f1" : "#38bdf8"} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          <p className="mt-1 text-[11px] text-slate-500">
-            Blue = observed (model input) · Indigo = forecast (outlook only, not model input)
-          </p>
-        </>
-      )}
-    </div>
+        {data.risk_history.length > 2 && (
+          <>
+            <h3 className="mt-5 text-[11px] font-bold uppercase tracking-wider text-fg-subtle">
+              24h-risk trend, recent refreshes
+            </h3>
+            <ResponsiveContainer width="100%" height={80}>
+              <AreaChart data={data.risk_history} margin={{ top: 6, right: 4, left: -14, bottom: 0 }}>
+                <ChartTooltip contentStyle={tooltipStyle}
+                              formatter={(v: number) => [pct(v), "24h risk"]} labelFormatter={() => ""} />
+                <Area type="monotone" dataKey="p24" stroke={dark ? "#38bdf8" : "#0e7490"}
+                      fill={dark ? "#38bdf822" : "#0e749018"} strokeWidth={2}
+                      dot={false} isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </>
+        )}
+      </div>
+    </Card>
   );
 }

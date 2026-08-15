@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DistrictRisk } from "./api";
-import { fetchMap } from "./api";
+import type { DistrictRisk, ReplayEvent } from "./api";
+import { fetchMap, fetchReplay, fetchReplayEvents } from "./api";
 import { tierHex, useTheme } from "./theme";
 import type { Horizon } from "./horizon";
 import MapView from "./components/MapView";
 import DistrictDetail from "./components/DistrictDetail";
+import ReplayDetail from "./components/ReplayDetail";
 import DistrictList from "./components/DistrictList";
 import SubscribeForm from "./components/SubscribeForm";
 import ThemeToggle from "./components/ThemeToggle";
@@ -41,6 +42,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [replayDate, setReplayDate] = useState<string | null>(null);
+  const [events, setEvents] = useState<ReplayEvent[]>([]);
   const timer = useRef<number | undefined>(undefined);
   const { theme } = useTheme();
   const hex = tierHex(theme === "dark");
@@ -59,26 +62,42 @@ export default function App() {
 
   useEffect(() => {
     load();
+    fetchReplayEvents().then((e) => setEvents(e.events)).catch(() => {});
     timer.current = window.setInterval(() => setUpdatedAt((t) => t), 30_000);
     return () => window.clearInterval(timer.current);
   }, [load]);
 
+  // displayed districts: live map, or the replayed historical snapshot
+  const [replayed, setReplayed] = useState<DistrictRisk[] | null>(null);
+  const [replayBusy, setReplayBusy] = useState(false);
+  useEffect(() => {
+    if (!replayDate) { setReplayed(null); return; }
+    setReplayBusy(true);
+    fetchReplay(replayDate)
+      .then((r) => setReplayed(r.districts))
+      .catch(() => setReplayed(null))
+      .finally(() => setReplayBusy(false));
+  }, [replayDate]);
+  const shown = replayed ?? districts;
+  const activeEvent = events.find((e) => e.date === replayDate) ?? null;
+
   const live = !error && districts.length > 0;
   const hIdx = horizon / 24 - 1;
-  const worst = districts.length
-    ? [...districts].sort((a, b) => b.tiers[hIdx] - a.tiers[hIdx] || b.p24 - a.p24)[0]
+  const worst = shown.length
+    ? [...shown].sort((a, b) => b.tiers[hIdx] - a.tiers[hIdx] || b.p24 - a.p24)[0]
     : null;
   const worstTier = worst ? worst.tiers[hIdx] : 0;
 
-  const exposure = districts.reduce(
+  const exposure = shown.reduce(
     (acc, d) => {
       if (d.tiers[hIdx] >= 2) { acc.pop += d.population; acc.n += 1; }
       return acc;
     },
     { pop: 0, n: 0 },
   );
-  const popTotal = districts.reduce((s, d) => s + d.population, 0);
-  const selectedPop = districts.find((d) => d.district === selected)?.population;
+  const popTotal = shown.reduce((s, d) => s + d.population, 0);
+  const selectedPop = shown.find((d) => d.district === selected)?.population;
+  const selectedEntry = shown.find((d) => d.district === selected);
 
   return (
     <div className="app-shell flex flex-col">
@@ -117,7 +136,7 @@ export default function App() {
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full"
                     style={{ background: "currentColor" }} />
             </span>
-            {live ? <>live<span className="hidden sm:inline"> · {timeAgo(updatedAt)}</span></> : "API offline"}
+            {replayDate ? "replay" : live ? <>live<span className="hidden sm:inline"> · {timeAgo(updatedAt)}</span></> : "API offline"}
           </span>
           <button onClick={load} disabled={loading} className="btn">
             <svg className={`h-3.5 w-3.5 ${loading ? "animate-spin motion-reduce:animate-none" : ""}`}
@@ -154,7 +173,7 @@ export default function App() {
                 </svg>
               </span>
               <span className="kpi-main">
-                <span className="kpi-value">{districts.length}</span>
+                <span className="kpi-value">{shown.length}</span>
                 <span className="kpi-label">districts · 3 basins</span>
               </span>
             </div>
@@ -200,31 +219,83 @@ export default function App() {
         </div>
       )}
 
+      {live && (
+        <div className="main !pt-0">
+          <div className="panel anim-in !py-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <span className="section-h !m-0 shrink-0">Historical replay</span>
+              <input
+                type="date"
+                value={replayDate ?? ""}
+                min="2021-08-20"
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setReplayDate(e.target.value || null)}
+                aria-label="Replay date"
+                className="composer-field mono !w-auto cursor-pointer"
+                style={{ padding: "2px 6px 2px 10px" }}
+              />
+              {replayDate && (
+                <button onClick={() => setReplayDate(null)} className="btn btn-primary !py-1">
+                  ● Return to live
+                </button>
+              )}
+              {replayBusy && <span className="chip mono">replaying…</span>}
+              {activeEvent && (
+                <span className="chip">
+                  {activeEvent.name}
+                  <span className="mono">{activeEvent.note}</span>
+                </span>
+              )}
+              <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                {events.map((ev) => (
+                  <button
+                    key={ev.date}
+                    onClick={() => setReplayDate(ev.date === replayDate ? null : ev.date)}
+                    title={`${ev.note}${ev.peak_mm ? ` · peak ${ev.peak_mm}mm (${ev.peak_district})` : ""}`}
+                    className={`chip cursor-pointer transition-colors
+                                ${ev.date === replayDate
+                                  ? "!border-transparent !bg-accent !text-accent-fg"
+                                  : "hover:border-line-strong"}`}
+                  >
+                    {ev.name}
+                    <span className="mono">{ev.date.slice(5)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="main">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_400px]">
           <div className="panel !p-2.5 min-h-0 sm:min-h-[440px]">
-            {districts.length === 0 && !error ? (
+            {shown.length === 0 && !error ? (
               <div className="skeleton h-full w-full" style={{ minHeight: 420, borderRadius: "var(--r-lg)" }} />
             ) : (
-              <MapView districts={districts} selected={selected} onSelect={setSelected}
+              <MapView districts={shown} selected={selected} onSelect={setSelected}
                        horizon={horizon} onHorizonChange={setHorizon} />
             )}
           </div>
 
           <div className="grid gap-5 content-start">
-            {selected ? (
-              <DistrictDetail
-                district={selected}
-                onClose={() => setSelected(null)}
-                population={selectedPop}
-              />
+            {selected && selectedEntry ? (
+              replayDate && selectedEntry.rainfall_24h !== undefined ? (
+                <ReplayDetail d={selectedEntry} onClose={() => setSelected(null)} />
+              ) : (
+                <DistrictDetail
+                  district={selected}
+                  onClose={() => setSelected(null)}
+                  population={selectedPop}
+                />
+              )
             ) : (
-              districts.length > 0 && !error && (
-                <DistrictList districts={districts} selected={selected}
+              shown.length > 0 && !error && (
+                <DistrictList districts={shown} selected={selected}
                               onSelect={setSelected} horizon={horizon} />
               )
             )}
-            <SubscribeForm districts={districts.map((d) => d.district)} />
+            <SubscribeForm districts={shown.map((d) => d.district)} />
           </div>
         </div>
       </main>

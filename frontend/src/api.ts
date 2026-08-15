@@ -17,6 +17,12 @@ export interface DistrictRisk {
   p72: number;
   as_of: string | null;
   source: string;
+  /* present in replay mode only */
+  observed_date?: string;
+  rainfall_24h?: number;
+  rain_3d_mm?: number;
+  rain_7d_mm?: number;
+  flood_label?: number;
 }
 
 export interface ImpactSummary {
@@ -50,6 +56,23 @@ export const fetchMap = () =>
   get<{ districts: DistrictRisk[]; legend: [string, string][]; impact: ImpactSummary }>(
     "/api/risk/map",
   );
+
+export interface ReplayEvent {
+  date: string;
+  name: string;
+  note: string;
+  peak_district?: string;
+  peak_mm?: number;
+}
+
+export const fetchReplay = (date: string) =>
+  get<{ districts: DistrictRisk[]; legend: [string, string][]; impact: ImpactSummary } &
+    { mode: "replay"; date: string }>(
+    `/api/risk/replay?date=${date}`,
+  );
+
+export const fetchReplayEvents = () =>
+  get<{ events: ReplayEvent[] }>("/api/risk/replay/events");
 
 export const fetchDistrict = (district: string) =>
   get<DistrictDetail>(`/api/risk/${encodeURIComponent(district)}`);

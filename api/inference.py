@@ -80,18 +80,19 @@ def fetch_live_daily(past_days: int = 10, forecast_days: int = 4) -> pd.DataFram
     return df
 
 
-def _fallback_tiers(df: pd.DataFrame) -> dict:
+def _fallback_tiers(df: pd.DataFrame, cutoff=None) -> dict:
     """IMD rainfall-threshold tiers when the model path is unavailable.
 
     Degraded mode so the API (and the live demo) never dies: severity from
     the last observed day's rainfall against IMD 24h classes plus 3-day
     accumulation. Entries are marked source="fallback".
     """
-    today = pd.Timestamp.now(tz="Asia/Kolkata").tz_localize(None).normalize()
+    cutoff = (pd.Timestamp.now(tz="Asia/Kolkata").tz_localize(None).normalize()
+              if cutoff is None else pd.Timestamp(cutoff).normalize())
     out = {}
     for sid, g in df.groupby("station_id"):
         g = g.sort_values("date").reset_index(drop=True)
-        end = int((g["date"] <= today).sum()) - 1
+        end = int((g["date"] <= cutoff).sum()) - 1
         if end < 0:
             continue
         row = g.iloc[end]
@@ -126,7 +127,7 @@ def predict_all(past_days: int = 10, forecast_days: int = 4) -> dict:
         return _fallback_tiers(df)
 
 
-def _predict_with_model(df: pd.DataFrame) -> dict:
+def _predict_with_model(df: pd.DataFrame, cutoff=None) -> dict:
     model, stats, calib = load_bundle()
 
     seq_mu = pd.Series(stats["seq_mu"], index=SEQ_FEATURES)
@@ -135,13 +136,14 @@ def _predict_with_model(df: pd.DataFrame) -> dict:
     st_sd = pd.Series(stats["st_sd"], index=STATIC_FEATURES)
 
     window = 7
-    today = pd.Timestamp.now(tz="Asia/Kolkata").tz_localize(None).normalize()
+    cutoff = (pd.Timestamp.now(tz="Asia/Kolkata").tz_localize(None).normalize()
+              if cutoff is None else pd.Timestamp(cutoff).normalize())
     out = {}
     for sid, g in df.groupby("station_id"):
         g = g.sort_values("date").reset_index(drop=True)
         # observed rows only — forecast rain feeds the dashboard outlook,
         # never the model input window
-        end = int((g["date"] <= today).sum()) - 1     # index of last observed day
+        end = int((g["date"] <= cutoff).sum()) - 1    # index of last observed day
         if end < window:
             continue
         seq = ((g.loc[end - window:end, SEQ_FEATURES] - seq_mu) / seq_sd).to_numpy(np.float32)
@@ -159,4 +161,92 @@ def _predict_with_model(df: pd.DataFrame) -> dict:
             entry[f"p{24*h}"] = round(p_cal, 4)
             entry[f"tier{24*h}"] = tier
         out[sid] = entry
+    return out
+
+
+# ---------------------------------------------------------------- replay --
+# Historical time-travel: run the SAME model on the unified dataset as of a
+# past date, to demonstrate behavior on real flood days. The window only
+# sees the 7 days BEFORE the cutoff — no future leakage into the replay.
+
+HISTORY_CSV = f"{ARTIFACTS}/unified_daily.csv"
+
+# Curated demonstration dates — verified present in the dataset with
+# flood-class rainfall. Notes cite observed totals from the data itself.
+REPLAY_EVENTS = [
+    {"date": "2026-07-23", "name": "Palghar deluge",
+     "note": "283mm in 24h · 537mm over 3 days"},
+    {"date": "2026-07-06", "name": "Konkan multi-day event",
+     "note": "400mm+ over 3 days, Raigad–Palghar"},
+    {"date": "2024-06-09", "name": "Kolhapur monsoon-onset floods",
+     "note": "242mm in 24h · 364mm over 3 days"},
+    {"date": "2025-05-26", "name": "Pre-monsoon Konkan storm",
+     "note": "Raigad 217mm, Sindhudurg 189mm next day"},
+    {"date": "2025-08-19", "name": "Ratnagiri August deluge",
+     "note": "156mm in 24h · 341mm over 3 days"},
+    {"date": "2021-09-07", "name": "September Konkan rain",
+     "note": "148mm in 24h · 277mm over 3 days"},
+]
+
+
+@lru_cache(maxsize=1)
+def _history() -> pd.DataFrame | None:
+    """Unified dataset with upstream lags, loaded once."""
+    from pathlib import Path
+    if not Path(HISTORY_CSV).exists():
+        return None
+    df = pd.read_csv(HISTORY_CSV, parse_dates=["date"])
+    df = add_upstream_lags(df)
+    df[["up_rain_lag1", "up_rain_lag2"]] = df[["up_rain_lag1", "up_rain_lag2"]].fillna(0.0)
+    return df
+
+
+def replay(date_str: str) -> dict:
+    """Per-station risk as of a historical date, plus observed rainfall.
+
+    Raises ValueError on malformed/unavailable dates.
+    """
+    df = _history()
+    if df is None:
+        raise ValueError("historical dataset not built — run src.data.build_dataset")
+    cutoff = pd.Timestamp(date_str)
+    if cutoff < df["date"].min() or cutoff > df["date"].max():
+        raise ValueError(
+            f"date outside dataset range {df['date'].min().date()} .. {df['date'].max().date()}")
+    try:
+        preds = _predict_with_model(df, cutoff)
+    except Exception as e:  # noqa: BLE001
+        print(f"[replay] model path failed ({type(e).__name__}: {e}); fallback tiers")
+        preds = _fallback_tiers(df, cutoff)
+
+    # observed conditions at the cutoff per station (last row <= cutoff)
+    observed = {}
+    for sid, g in df[df["date"] <= cutoff].groupby("station_id"):
+        row = g.sort_values("date").iloc[-1]
+        observed[sid] = {
+            "observed_date": str(row["date"].date()),
+            "rainfall_24h": round(float(row["rainfall_mm"]), 1),
+            "rain_3d_mm": round(float(row["rain_3d_mm"]), 1),
+            "rain_7d_mm": round(float(row["rain_7d_mm"]), 1),
+            "flood_label": int(row["flood_label"]),
+        }
+    for sid, obs in observed.items():
+        if sid in preds:
+            preds[sid].update(obs)
+    return preds
+
+
+def replay_events() -> list[dict]:
+    """Curated flood-day presets, annotated with observed peak rain."""
+    df = _history()
+    out = []
+    for ev in REPLAY_EVENTS:
+        entry = dict(ev)
+        if df is not None:
+            day = df[df["date"] == pd.Timestamp(ev["date"])]
+            if len(day):
+                peak = day.loc[day["rainfall_mm"].idxmax()]
+                entry["peak_district"] = peak["district"]
+                entry["peak_mm"] = round(float(peak["rainfall_mm"]), 1)
+        out.append(entry)
     return out

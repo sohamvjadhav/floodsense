@@ -245,6 +245,12 @@ export default function MapView({
                     </span>
                     <span className="mono text-[10px] text-fg-subtle">at +{horizon}h</span>
                   </div>
+                  {d.rainfall_24h !== undefined && (
+                    <p className="mono mt-2 rounded-md bg-surface-2 px-2 py-1 text-[11px]">
+                      observed {d.rainfall_24h}mm/24h
+                      {d.rain_3d_mm ? ` · ${d.rain_3d_mm}mm/3d` : ""}
+                    </p>
+                  )}
                   <div className="mt-2 grid grid-cols-3 gap-2 text-center">
                     {[["+24h", d.p24], ["+48h", d.p48], ["+72h", d.p72]].map(([h, p]) => (
                       <div key={h as string} className="rounded-md bg-surface-2 px-1.5 py-1">

@@ -19,7 +19,7 @@ from sqlalchemy import select, func
 
 from .alerts import TIER_NAMES
 from .db import RiskState, SessionLocal, Subscription
-from .inference import fetch_live_daily
+from .inference import fetch_live_daily, replay as replay_inference, replay_events
 from .live import REFRESH_HOURS, run_cycle
 from src.data.stations import STATIONS, STATION_BY_ID
 
@@ -117,6 +117,72 @@ def risk_map(horizon: int = 24):
             "districts_alerting": sum(1 for d in out if d["tier"] >= 2),
         },
     }
+
+
+def _districts_payload(state_by_sid: dict, horizon: int, live: bool = True) -> dict:
+    """Shared map-shape payload builder for live RiskState rows and replay
+    dicts (both expose tier24/48/72, p24/48/72, as_of, source)."""
+    out = []
+    pop_alerting = pop_total = 0
+    for s in STATIONS:
+        r = state_by_sid.get(s["station_id"])
+        tiers = [
+            (r.tier24 if hasattr(r, "tier24") else r.get("tier24", 0)) if r else 0,
+            (r.tier48 if hasattr(r, "tier48") else r.get("tier48", 0)) if r else 0,
+            (r.tier72 if hasattr(r, "tier72") else r.get("tier72", 0)) if r else 0,
+        ]
+        tier = tiers[(horizon // 24) - 1]
+        pop_total += s["population"]
+        if tier >= 2:
+            pop_alerting += s["population"]
+        entry = {
+            "station_id": s["station_id"], "district": s["district"],
+            "basin": s["basin"], "lat": s["lat"], "lon": s["lon"],
+            "population": s["population"],
+            "tier": tier, "tier_name": TIER_NAMES[tier], "tiers": tiers,
+            "color": TIER_COLORS[tier],
+            "p24": (r.p24 if hasattr(r, "p24") else r.get("p24", 0.0)) if r else 0.0,
+            "p48": (r.p48 if hasattr(r, "p48") else r.get("p48", 0.0)) if r else 0.0,
+            "p72": (r.p72 if hasattr(r, "p72") else r.get("p72", 0.0)) if r else 0.0,
+            "as_of": (r.as_of if hasattr(r, "as_of") else r.get("as_of")) if r else None,
+            "source": ((r.source if hasattr(r, "source") else r.get("source", "model"))
+                       if r else "model"),
+        }
+        if not live and r:
+            for k in ("observed_date", "rainfall_24h", "rain_3d_mm",
+                      "rain_7d_mm", "flood_label"):
+                if k in r:
+                    entry[k] = r[k]
+        out.append(entry)
+    return {
+        "districts": out,
+        "legend": list(zip(TIER_NAMES, TIER_COLORS)),
+        "impact": {
+            "horizon": horizon,
+            "population_total": pop_total,
+            "population_alerting": pop_alerting,
+            "districts_alerting": sum(1 for d in out if d["tier"] >= 2),
+        },
+    }
+
+
+@app.get("/api/risk/replay")
+def risk_replay(date: str, horizon: int = 24):
+    if horizon not in (24, 48, 72):
+        raise HTTPException(422, "horizon must be 24, 48, or 72")
+    try:
+        preds = replay_inference(date)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    payload = _districts_payload(preds, horizon, live=False)
+    payload["mode"] = "replay"
+    payload["date"] = date
+    return payload
+
+
+@app.get("/api/risk/replay/events")
+def risk_replay_events():
+    return {"events": replay_events()}
 
 
 @app.get("/api/risk/{district}")

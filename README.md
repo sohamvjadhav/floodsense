@@ -69,6 +69,7 @@ VITE_API_URL=http://localhost:8000 npm run build        # production build
 | `GET /api/risk/replay?date=` | historical time-travel: model runs on prior 7 days only, observed rainfall per district |
 | `GET /api/risk/replay/events` | curated flood-day presets for the demo (Palghar 2026 deluge, Kolhapur 2024 onset…) |
 | `POST /api/risk/scenario` | `{station_id, rain_mm}` what-if: one hypothetical rainy day appended, model re-run (drill planning) |
+| `GET /api/risk/replay/range` | consecutive daily replay frames — source for event playback animation |
 
 **Why-this-risk drivers**: current 24h/7d rainfall and upstream lags ranked
 against same-calendar-month climatological percentiles from the 5-year

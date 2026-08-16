@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DistrictRisk, ReplayEvent } from "./api";
-import { fetchMap, fetchReplay, fetchReplayEvents } from "./api";
+import { fetchMap, fetchReplay, fetchReplayEvents, fetchReplayRange,
+         type ReplayFrame } from "./api";
 import { tierHex, useTheme } from "./theme";
 import type { Horizon } from "./horizon";
 import MapView from "./components/MapView";
@@ -70,6 +71,7 @@ export default function App() {
   // displayed districts: live map, or the replayed historical snapshot
   const [replayed, setReplayed] = useState<DistrictRisk[] | null>(null);
   const [replayBusy, setReplayBusy] = useState(false);
+  const [play, setPlay] = useState<{ frames: ReplayFrame[]; idx: number; playing: boolean } | null>(null);
   useEffect(() => {
     if (!replayDate) { setReplayed(null); return; }
     setReplayBusy(true);
@@ -78,8 +80,39 @@ export default function App() {
       .catch(() => setReplayed(null))
       .finally(() => setReplayBusy(false));
   }, [replayDate]);
-  const shown = replayed ?? districts;
-  const activeEvent = events.find((e) => e.date === replayDate) ?? null;
+  useEffect(() => {
+    if (!play?.playing) return;
+    if (play.idx >= play.frames.length - 1) {
+      setPlay((p) => (p ? { ...p, playing: false } : null));
+      return;
+    }
+    const t = window.setTimeout(
+      () => setPlay((p) => (p ? { ...p, idx: p.idx + 1 } : null)),
+      1100,
+    );
+    return () => window.clearTimeout(t);
+  }, [play]);
+
+  const startPlayback = (evDate: string) => {
+    const start = new Date(evDate);
+    start.setDate(start.getDate() - 6);
+    const iso = start.toISOString().slice(0, 10);
+    setReplayDate(null);
+    setReplayed(null);
+    fetchReplayRange(iso, 10)
+      .then((r) => setPlay({ frames: r.frames, idx: 0, playing: true }))
+      .catch(() => setPlay(null));
+  };
+
+  const shown = play
+    ? play.frames[play.idx].districts
+    : replayed ?? districts;
+  const displayDate = play ? play.frames[play.idx].date : replayDate;
+  const activeEvent = events.find((e) => e.date === (play ? undefined : replayDate))
+    ?? (play
+      ? events.find((e) => e.date >= (play.frames[play.idx]?.date ?? "")
+          && new Date(e.date).getTime() - new Date(play.frames[play.idx].date).getTime() < 7 * 864e5)
+      : null);
 
   const live = !error && districts.length > 0;
   const hIdx = horizon / 24 - 1;
@@ -136,7 +169,7 @@ export default function App() {
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full"
                     style={{ background: "currentColor" }} />
             </span>
-            {replayDate ? "replay" : live ? <>live<span className="hidden sm:inline"> · {timeAgo(updatedAt)}</span></> : "API offline"}
+            {(play || replayDate) ? "replay" : live ? <>live<span className="hidden sm:inline"> · {timeAgo(updatedAt)}</span></> : "API offline"}
           </span>
           <button onClick={load} disabled={loading} className="btn">
             <svg className={`h-3.5 w-3.5 ${loading ? "animate-spin motion-reduce:animate-none" : ""}`}
@@ -240,6 +273,27 @@ export default function App() {
                 </button>
               )}
               {replayBusy && <span className="chip mono">replaying…</span>}
+              {play && (
+                <span className="chip !gap-2">
+                  <button
+                    aria-label={play.playing ? "Pause playback" : "Resume playback"}
+                    onClick={() => setPlay((p) => (p ? { ...p, playing: !p.playing } : null))}
+                    className="text-fg-muted hover:text-fg"
+                  >
+                    {play.playing ? "⏸" : "▶"}
+                  </button>
+                  <span className="mono">
+                    {play.frames[play.idx].date} · day {play.idx + 1}/{play.frames.length}
+                  </span>
+                  <button
+                    aria-label="Stop playback"
+                    onClick={() => setPlay(null)}
+                    className="text-fg-muted hover:text-fg"
+                  >
+                    ✕
+                  </button>
+                </span>
+              )}
               {activeEvent && (
                 <span className="chip">
                   {activeEvent.name}
@@ -250,14 +304,14 @@ export default function App() {
                 {events.map((ev) => (
                   <button
                     key={ev.date}
-                    onClick={() => setReplayDate(ev.date === replayDate ? null : ev.date)}
+                    onClick={() => (play ? setPlay(null) : startPlayback(ev.date))}
                     title={`${ev.note}${ev.peak_mm ? ` · peak ${ev.peak_mm}mm (${ev.peak_district})` : ""}`}
                     className={`chip cursor-pointer transition-colors
                                 ${ev.date === replayDate
                                   ? "!border-transparent !bg-accent !text-accent-fg"
                                   : "hover:border-line-strong"}`}
                   >
-                    {ev.name}
+                    ▶ {ev.name}
                     <span className="mono">{ev.date.slice(5)}</span>
                   </button>
                 ))}
@@ -280,7 +334,7 @@ export default function App() {
 
           <div className="grid gap-5 content-start">
             {selected && selectedEntry ? (
-              replayDate && selectedEntry.rainfall_24h !== undefined ? (
+              displayDate && selectedEntry.rainfall_24h !== undefined ? (
                 <ReplayDetail d={selectedEntry} onClose={() => setSelected(null)} />
               ) : (
                 <DistrictDetail

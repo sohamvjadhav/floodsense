@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactElement } from "react";
 import {
-  CircleMarker, MapContainer, Popup, ScaleControl, TileLayer, Tooltip, ZoomControl,
-  useMap,
+  CircleMarker, GeoJSON, MapContainer, Popup, ScaleControl, TileLayer, Tooltip,
+  ZoomControl, useMap,
 } from "react-leaflet";
+import type { Feature, Geometry } from "geojson";
 import type { DistrictRisk } from "../api";
 import { tierHex, useTheme, pct } from "../theme";
 import type { Horizon } from "../horizon";
@@ -36,6 +37,42 @@ const LABELS = {
   light: "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png",
   dark: "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
 };
+
+
+function LayerToggle({
+  value, onChange,
+}: {
+  value: "districts" | "markers";
+  onChange: (v: "districts" | "markers") => void;
+}) {
+  return (
+    <div className="absolute left-3 top-14 z-[1000]">
+      <div
+        role="tablist"
+        aria-label="Map layer"
+        className="flex items-center gap-0.5 rounded-full border border-line bg-surface/95
+                   p-1 shadow-md backdrop-blur"
+      >
+        {([["districts", "Districts"], ["markers", "Stations"]] as const).map(([k, label]) => (
+          <button
+            key={k}
+            role="tab"
+            aria-selected={value === k}
+            onClick={() => onChange(k)}
+            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors
+                        focus-visible:outline-none focus-visible:ring-2
+                        focus-visible:ring-accent/60
+                        ${value === k
+                          ? "bg-accent text-accent-fg"
+                          : "text-fg-muted hover:text-fg"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const TIER_LABEL = ["Low", "Medium", "High", "Severe"];
 
@@ -158,6 +195,16 @@ export default function MapView({
   const { theme } = useTheme();
   const dark = theme === "dark";
   const [base, setBase] = useState<BaseKey>("satellite");
+  const [geo, setGeo] = useState<Feature<Geometry, { district: string }>[] | null>(null);
+  const [layerMode, setLayerMode] = useState<"districts" | "markers">("districts");
+
+  useEffect(() => {
+    fetch("/maharashtra_districts.geojson")
+      .then((r) => r.json())
+      .then((fc: { features: Feature<Geometry, { district: string }>[] }) =>
+        setGeo(fc.features))
+      .catch(() => setGeo(null));
+  }, []);
   const hex = tierHex(dark);
   const idx = horizon / 24 - 1;
 
@@ -168,6 +215,21 @@ export default function MapView({
   const coarse = typeof window.matchMedia === "function" &&
     window.matchMedia("(pointer: coarse)").matches;
   const touchBoost = coarse ? 2.5 : 0;
+
+  const byDistrict = new Map(districts.map((d) => [d.district, d]));
+  // polygon signature forces layer restyle when tiers change
+  const tierSig = districts.map((d) => d.tiers[idx]).join("");
+
+  const styleFeature = (feature?: Feature<Geometry, { district: string }>) => {
+    const d = feature ? byDistrict.get(feature.properties.district) : undefined;
+    const tier = d ? d.tiers[idx] : -1;
+    return {
+      color: tier >= 0 ? hex[tier] : "var(--border-strong)",
+      weight: d?.district === selected ? 2.5 : 1,
+      fillColor: tier >= 0 ? hex[tier] : "var(--surface-3)",
+      fillOpacity: tier >= 0 ? 0.42 : 0.35,
+    };
+  };
 
   return (
     <div className="relative h-[62vh] overflow-hidden rounded-xl border border-line
@@ -192,7 +254,22 @@ export default function MapView({
         <ScaleControl position="bottomright" imperial={false} />
         <InvalidateOnMount />
 
-        {districts.map((d) => {
+        {geo && layerMode === "districts" && (
+          <GeoJSON
+            key={`districts-${theme}-${tierSig}-${selected ?? ""}`}
+            data={{ type: "FeatureCollection", features: geo } as never}
+            style={styleFeature as never}
+            eventHandlers={{
+              click: (e) => {
+                const f = (e.propagatedFrom as never as { feature?: Feature<Geometry, { district: string }> })?.feature;
+                const name = f?.properties?.district;
+                if (name && byDistrict.has(name)) onSelect(name);
+              },
+            }}
+          />
+        )}
+
+        {layerMode === "markers" && districts.map((d) => {
           const tier = d.tiers[idx];
           const alerting = tier >= 2;
           const isSel = d.district === selected;
@@ -275,6 +352,7 @@ export default function MapView({
 
       <HorizonScrubber horizon={horizon} onChange={onHorizonChange} />
       <BasemapSwitcher value={base} onChange={setBase} />
+      <LayerToggle value={layerMode} onChange={setLayerMode} />
 
       {/* legend overlay */}
       <div className="pointer-events-none absolute bottom-3 left-3 z-[500]

@@ -1,3 +1,4 @@
+from datetime import date as date_cls, timedelta
 """FloodSense API — single FastAPI service (public API + inference).
 
 Endpoints (spec):
@@ -180,6 +181,30 @@ def risk_replay(date: str, horizon: int = 24):
     payload["mode"] = "replay"
     payload["date"] = date
     return payload
+
+
+@app.get("/api/risk/replay/range")
+def risk_replay_range(start: str, days: int = 10):
+    """Consecutive daily replay frames — the animation source for event
+    playback. Each frame is the standard replay payload for that date."""
+    days = max(2, min(14, days))
+    try:
+        base = date_cls.fromisoformat(start)
+    except ValueError:
+        raise HTTPException(422, "start must be YYYY-MM-DD")
+    frames = []
+    for i in range(days):
+        d = (base + timedelta(days=i)).isoformat()
+        try:
+            preds = replay_inference(d)
+        except ValueError:
+            continue
+        payload = _districts_payload(preds, 24, live=False)
+        payload["date"] = d
+        frames.append(payload)
+    if not frames:
+        raise HTTPException(422, "no data in requested range")
+    return {"frames": frames}
 
 
 @app.get("/api/risk/replay/events")

@@ -99,6 +99,17 @@ export async function runScenario(stationId: string, rainMm: number): Promise<Sc
   return r.json();
 }
 
+export interface ReplayFrame {
+  districts: DistrictRisk[];
+  impact: ImpactSummary;
+  date: string;
+}
+
+export const fetchReplayRange = (start: string, days = 10) =>
+  get<{ frames: ReplayFrame[] }>(
+    `/api/risk/replay/range?start=${start}&days=${days}`,
+  );
+
 export const fetchReplayEvents = () =>
   get<{ events: ReplayEvent[] }>("/api/risk/replay/events");
 

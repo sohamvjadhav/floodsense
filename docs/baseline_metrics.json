@@ -9,9 +9,9 @@
     "elevation_m"
   ],
   "split": "time-based 70/15/15",
-  "test_size": 4095,
-  "accuracy": 1.0,
-  "precision_1": 1.0,
+  "test_size": 9555,
+  "accuracy": 0.9996860282574568,
+  "precision_1": 0.9629629629629629,
   "recall_1": 1.0,
-  "f1_1": 1.0
+  "f1_1": 0.9811320754716981
 }

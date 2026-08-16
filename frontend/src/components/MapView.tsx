@@ -227,7 +227,7 @@ export default function MapView({
       color: tier >= 0 ? hex[tier] : "var(--border-strong)",
       weight: d?.district === selected ? 2.5 : 1,
       fillColor: tier >= 0 ? hex[tier] : "var(--surface-3)",
-      fillOpacity: tier >= 0 ? 0.42 : 0.35,
+      fillOpacity: tier >= 0 ? 0.25 : 0.18,
     };
   };
 

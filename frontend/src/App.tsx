@@ -207,7 +207,7 @@ export default function App() {
               </span>
               <span className="kpi-main">
                 <span className="kpi-value">{shown.length}</span>
-                <span className="kpi-label">districts · 3 basins</span>
+                <span className="kpi-label">districts · {new Set(shown.map((d) => d.basin)).size} basins</span>
               </span>
             </div>
             <div className={`kpi ${exposure.n > 0 ? "kpi-warn" : ""}`}>

@@ -223,11 +223,17 @@ export default function MapView({
   const styleFeature = (feature?: Feature<Geometry, { district: string }>) => {
     const d = feature ? byDistrict.get(feature.properties.district) : undefined;
     const tier = d ? d.tiers[idx] : -1;
+    // color alone sinks into satellite imagery — districts need a hard
+    // boundary edge: white on imagery, theme ink on vector basemaps
+    const edge = base === "satellite"
+      ? "#FFFFFF"
+      : dark ? "#E7ECF2" : "#0E1116";
+    const isSel = d?.district === selected;
     return {
-      color: tier >= 0 ? hex[tier] : "var(--border-strong)",
-      weight: d?.district === selected ? 2.5 : 1,
+      color: isSel ? "#FFFFFF" : edge,
+      weight: isSel ? 3 : tier >= 2 ? 2 : 1.2,
       fillColor: tier >= 0 ? hex[tier] : "var(--surface-3)",
-      fillOpacity: tier >= 0 ? 0.25 : 0.18,
+      fillOpacity: tier >= 0 ? 0.5 : 0.18,
     };
   };
 
@@ -256,7 +262,7 @@ export default function MapView({
 
         {geo && layerMode === "districts" && (
           <GeoJSON
-            key={`districts-${theme}-${tierSig}-${selected ?? ""}`}
+            key={`districts-${theme}-${base}-${tierSig}-${selected ?? ""}`}
             data={{ type: "FeatureCollection", features: geo } as never}
             style={styleFeature as never}
             eventHandlers={{

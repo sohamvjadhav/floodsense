@@ -8,3 +8,5 @@ uvicorn[standard]
 sqlalchemy
 apscheduler
 httpx
+pydantic
+pytest

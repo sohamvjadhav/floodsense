@@ -1,0 +1,4 @@
+# FloodSense CI
+
+ruff
+pytest

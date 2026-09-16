@@ -1,0 +1,73 @@
+{
+  "total_gauges": 214,
+  "total_events": 4548,
+  "mh_gauges": 29,
+  "mh_events": 817,
+  "pilot": {
+    "INDOFLOODS-gauge-684": {
+      "present": true,
+      "name": "Karad (Krishna)",
+      "station": "Karad",
+      "river": "Krishna",
+      "privacy": "Open",
+      "reliability": "Safe",
+      "span": "1965-06-01->2020-05-27",
+      "span_days": 20085,
+      "level_entries": 19776,
+      "coverage_pct": 98.5,
+      "missing_days": 309,
+      "n_events": 5,
+      "event_range": "1997-08-24..2019-08-05",
+      "types": {
+        "Flood": 5
+      },
+      "daily_mask_available": false
+    },
+    "INDOFLOODS-gauge-678": {
+      "present": true,
+      "name": "Kurundwad (Krishna)",
+      "station": "Kurundwad",
+      "river": "Krishna",
+      "privacy": "Open",
+      "reliability": "Safe",
+      "span": "1972-05-01->2020-05-27",
+      "span_days": 17559,
+      "level_entries": 17315,
+      "coverage_pct": 98.6,
+      "missing_days": 244,
+      "n_events": 29,
+      "event_range": "1973-07-09..2019-08-04",
+      "types": {
+        "Flood": 21,
+        "Severe Flood": 8
+      },
+      "daily_mask_available": false
+    },
+    "INDOFLOODS-gauge-612": {
+      "present": true,
+      "name": "Takli (Krishna/Bhima)",
+      "station": "Takli",
+      "river": "Krishna/Bhima",
+      "privacy": "Open",
+      "reliability": "Safe",
+      "span": "1965-06-01->2020-05-27",
+      "span_days": 20085,
+      "level_entries": 19424,
+      "coverage_pct": 96.7,
+      "missing_days": 661,
+      "n_events": 35,
+      "event_range": "1965-08-01..2019-08-07",
+      "types": {
+        "Flood": 21,
+        "Severe Flood": 14
+      },
+      "daily_mask_available": false
+    }
+  },
+  "daily_series_available": false,
+  "verdict": "BLOCKED",
+  "verdict_reason": "Zenodo bundle ships aggregate counts + event rows only; no daily water-level/discharge series, so verified negative days cannot be constructed. Absence of an event row is NOT a verified negative.",
+  "unblock_requires": "Per-day gauge records (water level + discharge, 1965\u20132020 or subset) with warning/danger exceedance flags for the pilot gauges \u2014 via author request (HydroSense Lab, IIT Delhi) or CWC.",
+  "precip_rows": 4548,
+  "precip_note": "Per-event matched rainfall T1d..T10d available for event-scale analysis (not daily series)."
+}

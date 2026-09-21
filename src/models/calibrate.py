@@ -1,6 +1,15 @@
 """
 Phase 4: isotonic calibration of the trained GRU's output probabilities.
 
+STATUS: UNVALIDATED — DISABLED IN LIVE INFERENCE. The fitted isotonic
+maps worsened Brier on all horizons (raw 0.00240→cal 0.00260 @24h etc.)
+and the 24h Medium bin collapsed to width 0.0001 (see
+docs/calibration_metrics.json). api/inference.py serves RAW
+probabilities until this is re-fit with min-bin-width guards on a
+held-out fold. This script is retained as the re-fit tool, not as a
+validated step. Do not re-enable FLOODSENSE_CALIBRATION=on without
+fixing the above and recording the decision in docs/paper_caveats.md.
+
 Calibration is fit on the VALIDATION window only, evaluated on the same
 held-out TEST window as every other metric — the calibration never sees
 test data. Thresholds for risk tiers are chosen on validation as the

@@ -1,11 +1,18 @@
-"""Live inference: Open-Meteo forecast feed → GRU → calibrated tier per district.
+"""Live inference: Open-Meteo forecast feed → GRU → experimental
+rainfall-risk tier per district.
+
+EXPERIMENTAL RAINFALL-RISK GUIDANCE — not a flood forecast, not
+inundation, not an evacuation order. Forecast rain is reserved for the
+dashboard outlook and is NEVER fed to the model (no hindcasts exist).
 
 Loads the training artifact bundle (weights + normalization stats +
-isotonic calibration + tier thresholds) and reproduces the training
-feature pipeline exactly, so live inputs are transformed identically.
+tier thresholds) and reproduces the training feature pipeline exactly,
+so live inputs are transformed identically (shared 7-day builder:
+src/models/sequence_model.extract_window).
 """
 
 import json
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -16,7 +23,17 @@ import torch
 
 from src.data.stations import STATIONS
 from src.models.sequence_model import (HORIZONS, SEQ_FEATURES, STATIC_FEATURES,
-                                       FloodGRU, add_upstream_lags)
+                                       WINDOW, FloodGRU, add_upstream_lags,
+                                       extract_window)
+
+# Isotonic calibration is DISABLED pending re-validation: it worsened
+# Brier on all horizons and the 24h Medium bin was degenerate
+# (see docs/calibration_metrics.json + docs/paper_caveats.md).
+# Raw model probabilities are served with provisional quantile tiers,
+# explicitly marked calibration="disabled-provisional". Set to True only
+# after a held-out re-fit with min-bin-width guards.
+CALIBRATION_ENABLED = os.environ.get("FLOODSENSE_CALIBRATION", "off") == "on"
+CALIBRATION_STATUS = "isotonic" if CALIBRATION_ENABLED else "disabled-provisional"
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 ARTIFACTS = str(Path(__file__).resolve().parent.parent / "data" / "processed")
@@ -32,12 +49,50 @@ def load_bundle():
         stats = json.load(f)
     with open(f"{ARTIFACTS}/calibration.json") as f:
         calib = json.load(f)
+    # Compatibility gate: refuse artifacts trained under the old pipeline
+    # (full-data scaling, 8-row live slices, label-at-window-end). Anything
+    # failing this raises → callers degrade to fallback tiers, never to
+    # silently mis-scaled GRU outputs.
+    _check_artifact_compat(stats)
     return model, stats, calib
+
+
+class IncompatibleArtifactError(RuntimeError):
+    """Model/norm bundle predates the fixed pipeline — must retrain."""
+
+
+def _check_artifact_compat(stats: dict) -> None:
+    problems = []
+    if stats.get("fit") != "train-only":
+        problems.append("norm stats not train-only (full-data leakage)")
+    if stats.get("window") != WINDOW:
+        problems.append(f"window {stats.get('window')} != {WINDOW}")
+    if stats.get("label") != "heuristic_rainfall_proxy_future_window":
+        problems.append("label scheme predates strictly-future labels")
+    if list(stats.get("seq_mu", [])) and len(stats["seq_mu"]) != len(SEQ_FEATURES):
+        problems.append("seq feature count mismatch")
+    if problems:
+        raise IncompatibleArtifactError("; ".join(problems))
 
 
 def _isotonic_apply(p: float, xs: list, ys: list) -> float:
     """Step-function interpolation of a fitted isotonic regression."""
     return float(np.interp(p, xs, ys))
+
+
+def _apply_probability(p_raw: float, c: dict) -> tuple[float, int]:
+    """Raw probability → (served probability, tier).
+
+    Calibration DISABLED: serves the raw model probability and tiers it
+    against the stored provisional quantile cuts. Return carries no
+    calibrated claim — callers must mark calibration=disabled-provisional.
+    """
+    if CALIBRATION_ENABLED:
+        p_cal = _isotonic_apply(float(p_raw), c["xs"], c["ys"])
+    else:
+        p_cal = float(p_raw)
+    tier = int(np.digitize(p_cal, c["tiers"]))
+    return round(p_cal, 4), tier
 
 
 def fetch_live_daily(past_days: int = 10, forecast_days: int = 4) -> pd.DataFrame:
@@ -102,7 +157,8 @@ def _fallback_tiers(df: pd.DataFrame, cutoff=None) -> dict:
                 else 1 if (r24 >= 64.4 or r3 >= 100)
                 else 0)
         entry = {"district": row["district"], "station_id": sid,
-                 "as_of": str(row["date"].date()), "source": "fallback"}
+                 "as_of": str(row["date"].date()), "source": "fallback",
+                 "calibration": "n/a-fallback", "mode": "experimental_rain_risk"}
         for h in HORIZONS:
             entry[f"p{24*h}"] = round(min(1.0, (r24 + r3) / 300.0), 3)
             entry[f"tier{24*h}"] = tier
@@ -135,7 +191,7 @@ def _predict_with_model(df: pd.DataFrame, cutoff=None) -> dict:
     st_mu = pd.Series(stats["st_mu"], index=STATIC_FEATURES)
     st_sd = pd.Series(stats["st_sd"], index=STATIC_FEATURES)
 
-    window = 7
+    window = WINDOW
     cutoff = (pd.Timestamp.now(tz="Asia/Kolkata").tz_localize(None).normalize()
               if cutoff is None else pd.Timestamp(cutoff).normalize())
     out = {}
@@ -144,21 +200,22 @@ def _predict_with_model(df: pd.DataFrame, cutoff=None) -> dict:
         # observed rows only — forecast rain feeds the dashboard outlook,
         # never the model input window
         end = int((g["date"] <= cutoff).sum()) - 1    # index of last observed day
-        if end < window:
+        if end < window - 1:
             continue
-        seq = ((g.loc[end - window:end, SEQ_FEATURES] - seq_mu) / seq_sd).to_numpy(np.float32)
+        rows = extract_window(g, end, window)  # shared 7-day builder (train == live)
+        seq = ((rows[SEQ_FEATURES] - seq_mu) / seq_sd).to_numpy(np.float32)
         stat = ((g.loc[0, STATIC_FEATURES].astype(float) - st_mu) / st_sd).to_numpy(np.float32)
         x = torch.from_numpy(seq[None, ...]), torch.from_numpy(stat[None, ...])
         with torch.no_grad():
             p = model(*x).numpy()[0]
 
         entry = {"district": g.loc[0, "district"], "station_id": sid,
-                 "as_of": str(g.loc[end, "date"].date()), "source": "model"}
+                 "as_of": str(g.loc[end, "date"].date()), "source": "model",
+                 "calibration": CALIBRATION_STATUS, "mode": "experimental_rain_risk"}
         for k, h in enumerate(HORIZONS):
             c = calib[f"{24*h}h"]
-            p_cal = _isotonic_apply(float(p[k]), c["xs"], c["ys"])
-            tier = int(np.digitize(p_cal, c["tiers"]))
-            entry[f"p{24*h}"] = round(p_cal, 4)
+            p_served, tier = _apply_probability(float(p[k]), c)
+            entry[f"p{24*h}"] = p_served
             entry[f"tier{24*h}"] = tier
         out[sid] = entry
     return out
@@ -264,18 +321,19 @@ def _norm_helpers(stats: dict):
 
 def _predict_rows(rows: pd.DataFrame, stat_row: pd.Series, model, stats, calib) -> dict:
     """Predict from a prepared 7-row window + static row."""
+    assert len(rows) == WINDOW, f"scenario window must be {WINDOW} rows, got {len(rows)}"
     seq_mu, seq_sd, st_mu, st_sd = _norm_helpers(stats)
     seq = ((rows[SEQ_FEATURES] - seq_mu) / seq_sd).to_numpy(np.float32)
     stat = ((stat_row.astype(float) - st_mu) / st_sd).to_numpy(np.float32)
     x = torch.from_numpy(seq[None, ...]), torch.from_numpy(stat[None, ...])
     with torch.no_grad():
         p = model(*x).numpy()[0]
-    out = {}
+    out = {"calibration": CALIBRATION_STATUS, "mode": "experimental_rain_risk"}
     for k, h in enumerate(HORIZONS):
         c = calib[f"{24*h}h"]
-        p_cal = _isotonic_apply(float(p[k]), c["xs"], c["ys"])
-        out[f"p{24*h}"] = round(p_cal, 4)
-        out[f"tier{24*h}"] = int(np.digitize(p_cal, c["tiers"]))
+        p_served, tier = _apply_probability(float(p[k]), c)
+        out[f"p{24*h}"] = p_served
+        out[f"tier{24*h}"] = tier
     return out
 
 

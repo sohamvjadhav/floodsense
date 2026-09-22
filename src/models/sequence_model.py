@@ -2,6 +2,11 @@
 FloodSense sequence model v1 — GRU over a 7-day station window,
 multi-horizon (24/48/72h) risk outputs.
 
+EXPERIMENTAL RAINFALL-RISK GUIDANCE — not a flood forecast, not
+inundation, not an evacuation order. Labels are a heuristic rainfall
+proxy until verified daily gauge records are joined (see
+docs/indofloods_audit_report.md — real-label training is BLOCKED).
+
 Input per timestep (per station):
     rainfall_mm, rain_3d_mm, rain_7d_mm, precip_hours,
     upstream rain lagged 1d, upstream rain lagged 2d (mean over upstreams)
@@ -10,13 +15,19 @@ Static branch: elevation_m, lat, lon (normalized) — small feedforward.
 
 Outputs (sigmoid): risk_24h, risk_48h, risk_72h = P(flood-label day
 within next 1 / 2 / 3 days). NOTE: with the current heuristic rainfall
-label these are rainfall-risk forecasts; re-run after INDOFLOODS join.
+label these are rainfall-risk scores; re-run after INDOFLOODS join.
 
 The model NEVER sees current-day or future rainfall — unlike the
 baseline, which classifies same-day. That is the lead-time contribution.
 
-Time-based split, same 70/15/15 date boundaries as the baseline so the
-ablation table compares identical test windows.
+Time-based split with horizon buffer (see src/models/splits.py), same
+70/15/15 date boundaries as the baseline so the ablation table compares
+identical test windows. Normalization stats are fit on TRAIN windows
+only (no test-period leakage).
+
+The single shared 7-day window builder is extract_window() — training,
+live inference (api/inference.py) and scenario MUST all use it so live
+inputs are transformed identically to training.
 
 Usage:
     python -m src.models.sequence_model --data data/processed/unified_daily.csv
@@ -33,18 +44,27 @@ from sklearn.metrics import brier_score_loss, f1_score, precision_score, recall_
 
 from .baseline_stacking import time_split
 
-WINDOW = 7          # days of history per sample
+WINDOW = 7          # days of history per sample (shared by train + live)
+# Strict fold embargo (days): complete 7-day input span + 3-day label span.
+# Windows whose end date falls within EMBARGO_DAYS before a fold boundary
+# are purged, so NO input day and NO label day is shared across folds.
+EMBARGO_DAYS = 10
 SEQ_FEATURES = ["rainfall_mm", "rain_3d_mm", "rain_7d_mm", "precip_hours",
                 "up_rain_lag1", "up_rain_lag2"]
 STATIC_FEATURES = ["elevation_m", "lat", "lon"]
 HORIZONS = [1, 2, 3]   # days ahead → 24h/48h/72h
 
 
-def add_upstream_lags(df: pd.DataFrame) -> pd.DataFrame:
+def add_upstream_lags(df: pd.DataFrame, use_upstream: bool = True) -> pd.DataFrame:
     """Lagged upstream-station rainfall: spatial propagation features.
 
     For each station, mean rainfall of its upstream neighbors shifted
     1 and 2 days — water (and risk) moves downstream with delay.
+
+    use_upstream=False zeroes the lag columns AFTER computation, so the
+    local-only ablation keeps identical shapes/pipeline while carrying
+    no upstream signal (fix: previously zeroing before make_windows()
+    was silently recomputed away).
     """
     rain = df.pivot_table(index="date", columns="station_id", values="rainfall_mm")
     rain_lag1 = rain.shift(1)
@@ -53,8 +73,11 @@ def add_upstream_lags(df: pd.DataFrame) -> pd.DataFrame:
 
     def _ups_lags() -> pd.DataFrame:
         rows = []
+        present = set(rain.columns)
         for sid, s in STATION_BY_ID.items():
-            ups = s["upstream_ids"]
+            if sid not in present:
+                continue
+            ups = [u for u in s["upstream_ids"] if u in present]
             if ups:  # mean rainfall over upstream neighbors, lagged
                 rows.append(pd.DataFrame({
                     "date": rain.index,
@@ -74,43 +97,90 @@ def add_upstream_lags(df: pd.DataFrame) -> pd.DataFrame:
     df = df.merge(_ups_lags(), on=["date", "station_id"], how="left")
     # first 1-2 days of each series have no lag available → treat as 0
     df[["up_rain_lag1", "up_rain_lag2"]] = df[["up_rain_lag1", "up_rain_lag2"]].fillna(0.0)
+    if not use_upstream:
+        df[["up_rain_lag1", "up_rain_lag2"]] = 0.0
     return df
 
 
-def make_windows(df: pd.DataFrame):
+def extract_window(g: pd.DataFrame, end_pos: int, window: int = WINDOW) -> pd.DataFrame:
+    """Shared 7-day input builder: exactly `window` rows ending at end_pos.
+
+    `g` must be sorted by date with a reset RangeIndex; `end_pos` is the
+    integer position of the window END day (inclusive). Returns rows
+    [end_pos-window+1, end_pos] — always `window` rows. Training
+    (make_windows), live inference and scenario MUST all use this so
+    live inputs match training shape (fixes the live 8-row bug where
+    g.loc[end-window:end] sliced 8 rows inclusive).
+    """
+    start = end_pos - window + 1
+    if start < 0:
+        raise ValueError(f"insufficient history: end_pos={end_pos}, window={window}")
+    return g.iloc[start:end_pos + 1]
+
+
+def make_windows(df: pd.DataFrame, use_upstream: bool = True,
+                 embargo: int = EMBARGO_DAYS):
     """Build (N, WINDOW, F) sequences + static matrix + 3 horizon labels.
 
     Returns (X_seq, X_static, y, dates, sids, stats) — `stats` carries the
     normalization constants, persisted by main() so the inference API
     transforms live inputs identically to training.
-    """
-    df = add_upstream_lags(df)
-    df[["up_rain_lag1", "up_rain_lag2"]] = df[["up_rain_lag1", "up_rain_lag2"]].fillna(0.0)
-    seq_mu = df[SEQ_FEATURES].mean()
-    seq_sd = df[SEQ_FEATURES].std().replace(0, 1.0)
-    st_mu = df[STATIC_FEATURES].mean()
-    st_sd = df[STATIC_FEATURES].std().replace(0, 1.0)
-    stats = {
-        "seq_mu": seq_mu.tolist(), "seq_sd": seq_sd.tolist(),
-        "st_mu": st_mu.tolist(), "st_sd": st_sd.tolist(),
-    }
 
-    X_seq, X_static, y, dates, sids = [], [], [], [], []
+    Train-only scaling: stats are fit on windows whose end date falls in
+    the chronological TRAIN fold (70% of unique dates, minus `embargo`
+    days at the boundary). With the 10-day embargo no input day and no
+    label day is shared across folds (see fold_masks). Previously stats
+    were fit on the full dataframe (leakage) — fixed.
+
+    use_upstream=False builds the local-only ablation variant: lag
+    columns are zeroed after computation so shapes stay identical.
+    """
+    df = add_upstream_lags(df, use_upstream=use_upstream)
+    df[["up_rain_lag1", "up_rain_lag2"]] = df[["up_rain_lag1", "up_rain_lag2"]].fillna(0.0)
+
+    # --- collect unnormalized windows first ---
+    seq_list, stat_list, y_list, dates_list, sids_list = [], [], [], [], []
     for sid, g in df.groupby("station_id"):
         g = g.sort_values("date").reset_index(drop=True)
-        seq = ((g[SEQ_FEATURES] - seq_mu) / seq_sd).to_numpy(dtype=np.float32)
-        stat = ((g[STATIC_FEATURES].iloc[0] - st_mu) / st_sd).to_numpy(dtype=np.float32)
         lab = g["flood_label"].to_numpy()
         d = g["date"].to_numpy()
         n = len(g)
-        for i in range(WINDOW, n - max(HORIZONS)):
-            X_seq.append(seq[i - WINDOW:i])
-            X_static.append(stat)
-            y.append([int(lab[i:i + h].max()) for h in HORIZONS])
-            dates.append(d[i])
-            sids.append(sid)
-    return (np.stack(X_seq), np.stack(X_static), np.array(y, dtype=np.float32),
-            pd.to_datetime(dates), np.array(sids), stats)
+        for i in range(WINDOW - 1, n - max(HORIZONS)):
+            win = extract_window(g, i)  # exactly WINDOW rows ending at i
+            seq_list.append(win[SEQ_FEATURES].to_numpy(dtype=np.float32))
+            stat_list.append(g[STATIC_FEATURES].iloc[0].to_numpy(dtype=np.float32))
+            y_list.append([int(lab[i + 1:i + 1 + h].max()) for h in HORIZONS])
+            dates_list.append(d[i])
+            sids_list.append(sid)
+    # NOTE: label window is (i+1 .. i+h): strictly FUTURE days after the
+    # window end — the model never sees the days it predicts.
+
+    dates_arr = pd.to_datetime(pd.Series(dates_list))
+    uniq = sorted(dates_arr.unique())
+    train_end = pd.Timestamp(uniq[int(len(uniq) * 0.70)])
+    train_end_emb = train_end - pd.Timedelta(days=embargo)
+    train_mask = dates_arr <= train_end_emb
+    if int(train_mask.sum()) == 0:  # tiny/degenerate input — fall back to all rows
+        train_mask = pd.Series([True] * len(dates_arr))
+
+    seq_all = np.stack(seq_list)
+    stat_all = np.stack(stat_list)
+    seq_mu = seq_all[train_mask.to_numpy()].reshape(-1, len(SEQ_FEATURES)).mean(axis=0)
+    seq_sd = seq_all[train_mask.to_numpy()].reshape(-1, len(SEQ_FEATURES)).std(axis=0)
+    seq_sd = np.where(seq_sd == 0, 1.0, seq_sd)
+    st_mu = stat_all[train_mask.to_numpy()].mean(axis=0)
+    st_sd = stat_all[train_mask.to_numpy()].std(axis=0)
+    st_sd = np.where(st_sd == 0, 1.0, st_sd)
+    stats = {
+        "seq_mu": pd.Series(seq_mu).tolist(), "seq_sd": pd.Series(seq_sd).tolist(),
+        "st_mu": pd.Series(st_mu).tolist(), "st_sd": pd.Series(st_sd).tolist(),
+        "fit": "train-only", "embargo_days": embargo,
+    }
+
+    X_seq = ((seq_all - seq_mu) / seq_sd).astype(np.float32)
+    X_static = ((stat_all - st_mu) / st_sd).astype(np.float32)
+    return (X_seq, X_static, np.array(y_list, dtype=np.float32),
+            dates_arr, np.array(sids_list), stats)
 
 
 class FloodGRU(nn.Module):
@@ -128,16 +198,42 @@ class FloodGRU(nn.Module):
         return torch.sigmoid(self.head(z))   # (B, 3) probabilities
 
 
-def train_split(X_seq, X_static, y, dates):
-    """Same chronological boundaries as baseline: by window END date."""
-    d = pd.Series(dates)
+def fold_masks(dates, embargo: int = EMBARGO_DAYS):
+    """Boolean train/val/test masks over window END dates with strict embargo.
+
+    Same 70/15/15 date boundaries everywhere. A window belongs to the
+    earlier fold only if its end date is at least `embargo` days before
+    the boundary. With EMBARGO_DAYS=10 (7-day input + 3-day label span),
+    the full date span [end-6, end+3] of any two windows in different
+    folds is disjoint: no shared input day, no shared label day.
+    """
+    d = pd.Series(pd.to_datetime(dates)).reset_index(drop=True)
+    uniq = sorted(d.unique())
+    n = len(uniq)
+    train_end = pd.Timestamp(uniq[int(n * 0.70)])
+    val_end = pd.Timestamp(uniq[int(n * 0.85)])
+    emb = pd.Timedelta(days=embargo)
+    train_mask = d <= (train_end - emb)
+    val_mask = (d > train_end) & (d <= (val_end - emb))
+    test_mask = d > val_end
+    return train_mask, val_mask, test_mask
+
+
+def train_split(X_seq, X_static, y, dates, embargo: int = EMBARGO_DAYS):
+    """Chronological split on window END dates with strict fold embargo.
+
+    Same 70/15/15 date boundaries as the baseline. The 10-day embargo
+    (7-day input span + 3-day label span) guarantees disjoint input AND
+    label date spans across folds — see fold_masks.
+    """
+    d = pd.Series(pd.to_datetime(dates)).reset_index(drop=True)
     order = d.argsort()
-    X_seq, X_static, y, d = X_seq[order], X_static[order], y[order], d.iloc[order]
-    n = len(d)
-    tr, va = int(n * 0.70), int(n * 0.85)
-    return (X_seq[:tr], X_static[:tr], y[:tr]), \
-           (X_seq[tr:va], X_static[tr:va], y[tr:va]), \
-           (X_seq[va:], X_static[va:], y[va:])
+    X_seq, X_static, y, d = X_seq[order], X_static[order], y[order], d.iloc[order].reset_index(drop=True)
+    train_mask, val_mask, test_mask = fold_masks(d, embargo)
+    tr = (X_seq[train_mask.to_numpy()], X_static[train_mask.to_numpy()], y[train_mask.to_numpy()])
+    va = (X_seq[val_mask.to_numpy()], X_static[val_mask.to_numpy()], y[val_mask.to_numpy()])
+    te = (X_seq[test_mask.to_numpy()], X_static[test_mask.to_numpy()], y[test_mask.to_numpy()])
+    return tr, va, te
 
 
 def evaluate(model, split, name, thr=0.5):
@@ -195,6 +291,14 @@ def main(data_path, epochs=15, bs=256, lr=1e-3, out="docs/sequence_metrics.json"
     print(json.dumps(test_metrics, indent=2))
 
     torch.save(model.state_dict(), "data/processed/flood_gru_v1.pt")
+    stats.update({
+        "window": WINDOW,
+        "embargo_days": EMBARGO_DAYS,
+        "label": "heuristic_rainfall_proxy_future_window",
+        "horizons": HORIZONS,
+        "seq_features": SEQ_FEATURES,
+        "static_features": STATIC_FEATURES,
+    })
     with open("data/processed/norm_stats.json", "w") as f:
         json.dump(stats, f)
     with open(out, "w") as f:

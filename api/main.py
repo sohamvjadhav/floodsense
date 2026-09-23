@@ -1,5 +1,9 @@
-from datetime import date as date_cls, timedelta
+from datetime import date as date_cls, timedelta, datetime, timezone
 """FloodSense API — single FastAPI service (public API + inference).
+
+EXPERIMENTAL RAINFALL-RISK GUIDANCE — not a flood forecast, not
+inundation, not an evacuation order. Every risk payload carries
+mode/source/as_of/calibration/staleness provenance.
 
 Endpoints (spec):
     GET  /api/risk/map            all districts, current tier + probabilities
@@ -7,13 +11,19 @@ Endpoints (spec):
     POST /api/alerts/subscribe    {phone, district} → WhatsApp subscription
     GET  /api/stations/{id}/history  recent readings for detail charts
     POST /api/cron/run            manual live-cycle trigger (demo hook)
+    GET  /api/model/info          model metadata
+    GET  /api/model/metrics       evaluation metrics
+    GET  /api/risk/{district}/evidence  enhanced risk evidence
+    POST /api/alerts/unsubscribe  opt-out endpoint
 """
 
+import os
+import time
 from contextlib import asynccontextmanager
 from math import isnan
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select, func
@@ -26,7 +36,49 @@ from .inference import (fetch_live_daily, drivers as inference_drivers,
 from .live import REFRESH_HOURS, run_cycle
 from src.data.stations import STATIONS, STATION_BY_ID
 
+CRON_SECRET = os.environ.get("CRON_SECRET", "")
+
 TIER_COLORS = ["#22c55e", "#eab308", "#f97316", "#dc2626"]
+
+MODE = "experimental_rain_risk"
+MODE_NOTE = ("Experimental rainfall-risk guidance — not a flood forecast, "
+             "not inundation, not an evacuation order. Verify with official sources.")
+STALE_AFTER_HOURS = 24  # as_of older than this is flagged stale
+WARN_AFTER_HOURS = 6    # as_of older than this carries a freshness warning
+
+
+def _provenance(as_of: str | None, source: str) -> dict:
+    """Source/as-of/staleness provenance for one risk entry.
+
+    as_of is a YYYY-MM-DD window-end date (IST). Age is measured to start
+    of today IST; missing/unparseable as_of is treated as stale.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
+    except Exception:  # noqa: BLE001 — tzdata missing, fall back to UTC+5:30
+        now_ist = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+    today = now_ist.date()
+    age_days: float | None = None
+    if as_of:
+        try:
+            d = date_cls.fromisoformat(as_of)
+            age_days = (today - d).days + (now_ist.hour + now_ist.minute / 60) / 24
+        except ValueError:
+            age_days = None
+    age_hours = round(age_days * 24, 1) if age_days is not None else None
+    is_stale = True if age_hours is None else age_hours > STALE_AFTER_HOURS
+    warn = False if age_hours is None else age_hours > WARN_AFTER_HOURS
+    return {
+        "mode": MODE,
+        "mode_note": MODE_NOTE,
+        "source": source,
+        "as_of": as_of,
+        "age_hours": age_hours,
+        "is_stale": is_stale,
+        "freshness_warning": warn and not is_stale,
+        "stale_threshold_hours": STALE_AFTER_HOURS,
+    }
 
 
 @asynccontextmanager
@@ -78,7 +130,125 @@ def _latest_state(db) -> dict:
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    """Health check with model status and data freshness."""
+    from pathlib import Path
+    model_path = Path("data/processed/flood_gru_v1.pt")
+    calibration_path = Path("data/processed/calibration.json")
+    return {
+        "status": "ok",
+        "mode": MODE,
+        "mode_note": MODE_NOTE,
+        "model_loaded": model_path.exists(),
+        "calibration_loaded": calibration_path.exists(),
+        "calibration_status": "disabled-provisional",
+        "version": "1.0.0",
+        "stations": len(STATIONS),
+    }
+
+
+def verify_cron_secret(authorization: str = Header(None)):
+    """Verify cron endpoint authorization."""
+    if not CRON_SECRET:
+        return  # no secret configured — allow (dev mode)
+    if authorization != f"Bearer {CRON_SECRET}":
+        raise HTTPException(403, "invalid or missing cron secret")
+
+
+@app.get("/api/model/info")
+def model_info():
+    """Model metadata endpoint."""
+    from pathlib import Path
+    import json as _json
+    model_path = Path("data/processed/flood_gru_v1.pt")
+    norm_path = Path("data/processed/norm_stats.json")
+    info = {
+        "model_type": "FloodGRU",
+        "version": "v1",
+        "mode": MODE,
+        "mode_note": MODE_NOTE,
+        "window_days": 7,
+        "horizons": [24, 48, 72],
+        "calibration": "disabled-provisional",
+        "calibration_note": ("Isotonic maps unvalidated (worsened Brier, "
+                             "degenerate 24h bin); raw probabilities served."),
+        "label_source": "heuristic_rainfall_proxy",
+        "label_note": ("Deterministic rainfall rule, not observed floods. "
+                       "Real-label training BLOCKED pending daily gauge records."),
+        "training_split": "chronological 70/15/15 with 3-day horizon buffer, train-only scaling",
+        "model_loaded": model_path.exists(),
+    }
+    if norm_path.exists():
+        with open(norm_path) as f:
+            stats = _json.load(f)
+        info["n_seq_features"] = len(stats.get("seq_mu", []))
+        info["n_static_features"] = len(stats.get("st_mu", []))
+    return info
+
+
+@app.get("/api/model/metrics")
+def model_metrics():
+    """Return evaluation metrics from training."""
+    from pathlib import Path
+    import json as _json
+    metrics_path = Path("docs/sequence_metrics.json")
+    if not metrics_path.exists():
+        return {"status": "no metrics available"}
+    with open(metrics_path) as f:
+        return _json.load(f)
+
+
+class UnsubscribeIn(BaseModel):
+    phone: str
+    district: str
+
+
+@app.post("/api/alerts/unsubscribe")
+def unsubscribe(body: UnsubscribeIn):
+    """Unsubscribe from alerts."""
+    with SessionLocal() as db:
+        sub = db.scalars(select(Subscription).where(
+            Subscription.phone == body.phone,
+            Subscription.district == body.district)).first()
+        if sub:
+            sub.active = False
+            db.commit()
+            return {"ok": True, "message": f"unsubscribed from {body.district} alerts"}
+    return {"ok": False, "message": "subscription not found"}
+
+
+@app.get("/api/risk/{district}/evidence")
+def risk_evidence(district: str):
+    """Enhanced risk evidence with data quality and drivers."""
+    station = next((s for s in STATIONS if s["district"].lower() == district.lower()), None)
+    if not station:
+        raise HTTPException(404, f"unknown district: {district}")
+    with SessionLocal() as db:
+        rows = db.scalars(select(RiskState)
+                          .where(RiskState.station_id == station["station_id"])
+                          .order_by(RiskState.updated_at)).all()
+    if not rows:
+        raise HTTPException(503, "no inference yet")
+    latest = rows[-1]
+    try:
+        drv = inference_drivers(station["station_id"])
+    except Exception:
+        drv = None
+    return {
+        "district": station["district"],
+        "station_id": station["station_id"],
+        "risk": {"p24": latest.p24, "p48": latest.p48, "p72": latest.p72,
+                 "tier24": latest.tier24, "tier48": latest.tier48,
+                 "tier72": latest.tier72},
+        "data_quality": {
+            "source": latest.source,
+            "as_of": latest.as_of,
+        },
+        "provenance": _provenance(latest.as_of, latest.source),
+        "mode": MODE,
+        "mode_note": MODE_NOTE,
+        "drivers": drv,
+        "model_status": latest.source,
+    }
 
 
 @app.get("/api/risk/map")
@@ -109,10 +279,16 @@ def risk_map(horizon: int = 24):
             "p72": r.p72 if r else 0.0,
             "as_of": r.as_of if r else None,
             "source": getattr(r, "source", "model") if r else "model",
+            "provenance": _provenance(r.as_of if r else None,
+                                      getattr(r, "source", "model") if r else "model"),
         })
+    n_stale = sum(1 for d in out if d["provenance"]["is_stale"])
     return {
+        "mode": MODE,
+        "mode_note": MODE_NOTE,
         "districts": out,
         "legend": list(zip(TIER_NAMES, TIER_COLORS)),
+        "stale_count": n_stale,
         "impact": {
             "horizon": horizon,
             "population_total": pop_total,
@@ -239,6 +415,9 @@ def risk_district(district: str):
         "district": station["district"], "station_id": station["station_id"],
         "basin": station["basin"],
         "as_of": latest.as_of,
+        "mode": MODE,
+        "mode_note": MODE_NOTE,
+        "provenance": _provenance(latest.as_of, latest.source),
         "drivers": drv,
         "risk": {"p24": latest.p24, "p48": latest.p48, "p72": latest.p72,
                  "tier24": latest.tier24, "tier48": latest.tier48,
@@ -314,5 +493,10 @@ def station_history(station_id: str, days: int = 14):
 
 
 @app.post("/api/cron/run")
-def cron_run():
-    return run_cycle()
+def cron_run(authorization: str = Header(None)):
+    """Manual live-cycle trigger with optional auth."""
+    verify_cron_secret(authorization)
+    start = time.time()
+    result = run_cycle()
+    result["duration_ms"] = round((time.time() - start) * 1000)
+    return result

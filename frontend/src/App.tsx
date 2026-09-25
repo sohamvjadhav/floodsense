@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DistrictRisk, ReplayEvent } from "./api";
+import type { DistrictRisk, ReplayEvent, HealthStatus, ModelInfo, ModelMetrics } from "./api";
 import { fetchMap, fetchReplay, fetchReplayEvents, fetchReplayRange,
+         fetchHealth, fetchModelInfo, fetchModelMetrics,
          type ReplayFrame } from "./api";
 import { tierHex, useTheme } from "./theme";
 import type { Horizon } from "./horizon";
 import MapView from "./components/MapView";
 import DistrictDetail from "./components/DistrictDetail";
 import ReplayDetail from "./components/ReplayDetail";
+import ReplayTimeline from "./components/ReplayTimeline";
 import DistrictList from "./components/DistrictList";
 import SubscribeForm from "./components/SubscribeForm";
 import ThemeToggle from "./components/ThemeToggle";
@@ -45,6 +47,11 @@ export default function App() {
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [replayDate, setReplayDate] = useState<string | null>(null);
   const [events, setEvents] = useState<ReplayEvent[]>([]);
+  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
+  const [modelMetrics, setModelMetrics] = useState<ModelMetrics | null>(null);
+  const [showModelPanel, setShowModelPanel] = useState(false);
+  const [mapMeta, setMapMeta] = useState<{ mode?: string; stale_count?: number; asOf?: string | null }>({});
   const timer = useRef<number | undefined>(undefined);
   const { theme } = useTheme();
   const hex = tierHex(theme === "dark");
@@ -54,6 +61,8 @@ export default function App() {
     fetchMap()
       .then((d) => {
         setDistricts(d.districts);
+        const asOfs = d.districts.map((x) => x.as_of).filter((x): x is string => !!x).sort();
+        setMapMeta({ mode: d.mode, stale_count: d.stale_count, asOf: asOfs.length ? asOfs[asOfs.length - 1] : null });
         setError(null);
         setUpdatedAt(new Date().toISOString());
       })
@@ -64,6 +73,9 @@ export default function App() {
   useEffect(() => {
     load();
     fetchReplayEvents().then((e) => setEvents(e.events)).catch(() => {});
+    fetchHealth().then((h) => setHealth(h)).catch(() => {});
+    fetchModelInfo().then((m) => setModelInfo(m)).catch(() => {});
+    fetchModelMetrics().then((m) => setModelMetrics(m)).catch(() => {});
     timer.current = window.setInterval(() => setUpdatedAt((t) => t), 30_000);
     return () => window.clearInterval(timer.current);
   }, [load]);
@@ -140,7 +152,7 @@ export default function App() {
           <div className="brand-text">
             <span className="brand-name">FloodSense</span>
             <span className="brand-sub">
-              24–72h flood risk · Godavari / Krishna / Konkan
+              Experimental rainfall-risk guidance · Godavari / Krishna / Konkan
             </span>
           </div>
         </div>
@@ -156,6 +168,18 @@ export default function App() {
               {worst.district}
               <span className="mono" style={{ color: hex[worstTier] }}>
                 {TIER_LABEL[worstTier]}
+              </span>
+            </button>
+          )}
+          {health && (
+            <button
+              onClick={() => setShowModelPanel(!showModelPanel)}
+              className={`chip cursor-pointer hover:border-line-strong ${showModelPanel ? "!border-accent" : ""}`}
+              title="Model status & metrics"
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${health.model_loaded ? "bg-green-500" : "bg-red-500"}`} />
+              <span className="mono text-[10px]">
+                {health.model_loaded ? "GRU v1" : "no model"}
               </span>
             </button>
           )}
@@ -190,6 +214,19 @@ export default function App() {
             <p className="explain-text">
               Start it with <span className="mono">.venv/bin/uvicorn api.main:app --port 8000</span>
               <br /><span className="mono text-fg-subtle">{error}</span>
+            </p>
+          </div>
+        </div>
+      )}
+
+      {live && !replayDate && !play && (mapMeta.stale_count ?? 0) > 0 && (
+        <div className="main !pt-5 !pb-0">
+          <div className="panel anim-in" role="alert">
+            <p className="explain-text">
+              <strong>Stale data:</strong> {mapMeta.stale_count} of {districts.length} districts
+              last updated {mapMeta.asOf ?? "unknown"} — older than 24h. Guidance below may be
+              out of date; refresh or run the live cycle.{" "}
+              <span className="text-fg-muted">शिळा डेटा — मार्गदर्शन कालबाह्य असू शकते.</span>
             </p>
           </div>
         </div>
@@ -321,6 +358,18 @@ export default function App() {
         </div>
       )}
 
+      {live && play && (
+        <div className="main !pt-0">
+          <div className="panel anim-in !py-4">
+            <ReplayTimeline
+              frames={play.frames}
+              idx={play.idx}
+              onSelect={(i) => setPlay((p) => (p ? { ...p, idx: i, playing: false } : p))}
+            />
+          </div>
+        </div>
+      )}
+
       <main className="main">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_400px]">
           <div className="panel !p-2.5 min-h-0 sm:min-h-[440px]">
@@ -333,6 +382,72 @@ export default function App() {
           </div>
 
           <div className="grid gap-5 content-start">
+            {showModelPanel && health && (
+              <div className="panel anim-in">
+                <div className="panel-head">
+                  <h3>Model Status</h3>
+                  <button onClick={() => setShowModelPanel(false)} className="icon-btn">×</button>
+                </div>
+                <div className="kv">
+                  <div className="kv-row"><span className="k">model</span>
+                    <span className="v">{modelInfo?.model_type ?? "—"} {modelInfo?.version ?? ""}</span></div>
+                  <div className="kv-row"><span className="k">status</span>
+                    <span className="v">
+                      <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 ${health.model_loaded ? "bg-green-500" : "bg-red-500"}`} />
+                      {health.model_loaded ? "loaded" : "not loaded"}
+                    </span></div>
+                  <div className="kv-row"><span className="k">calibration</span>
+                    <span className="v">{health.calibration_loaded ? "loaded" : "missing"}</span></div>
+                  <div className="kv-row"><span className="k">stations</span>
+                    <span className="v">{health.stations}</span></div>
+                  <div className="kv-row"><span className="k">window</span>
+                    <span className="v">{modelInfo?.window_days ?? 7} days</span></div>
+                  <div className="kv-row"><span className="k">horizons</span>
+                    <span className="v mono">{modelInfo?.horizons?.join(", ") ?? "24, 48, 72"}h</span></div>
+                  <div className="kv-row"><span className="k">features</span>
+                    <span className="v mono">{modelInfo?.n_seq_features ?? 6} seq + {modelInfo?.n_static_features ?? 3} static</span></div>
+                  <div className="kv-row"><span className="k">split</span>
+                    <span className="v">{modelInfo?.training_split ?? "chronological"}</span></div>
+                </div>
+                {modelMetrics && modelMetrics.f1_24h !== undefined && (
+                  <>
+                    <h4 className="section-h">Test Metrics</h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[11px] mono">
+                        <thead>
+                          <tr className="text-fg-subtle border-b border-line">
+                            <th className="py-1 text-left font-medium">Horizon</th>
+                            <th className="py-1 text-right font-medium">F1</th>
+                            <th className="py-1 text-right font-medium">Precision</th>
+                            <th className="py-1 text-right font-medium">Recall</th>
+                            <th className="py-1 text-right font-medium">Brier</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            ["24h", modelMetrics.f1_24h, modelMetrics.precision_24h, modelMetrics.recall_24h, modelMetrics.brier_24h],
+                            ["48h", modelMetrics.f1_48h, modelMetrics.precision_48h, modelMetrics.recall_48h, modelMetrics.brier_48h],
+                            ["72h", modelMetrics.f1_72h, modelMetrics.precision_72h, modelMetrics.recall_72h, modelMetrics.brier_72h],
+                          ].map(([h, f1, p, r, b]) => (
+                            <tr key={h as string} className="border-b border-line/50">
+                              <td className="py-1 text-left">{h as string}</td>
+                              <td className="py-1 text-right">{f1 != null ? (f1 as number).toFixed(3) : "—"}</td>
+                              <td className="py-1 text-right">{p != null ? (p as number).toFixed(3) : "—"}</td>
+                              <td className="py-1 text-right">{r != null ? (r as number).toFixed(3) : "—"}</td>
+                              <td className="py-1 text-right">{b != null ? (b as number).toFixed(5) : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+                <p className="mt-2 text-[10px] text-fg-subtle">
+                  {modelMetrics?.split ?? "Chronological 70/15/15 split · no shuffle"}
+                </p>
+              </div>
+            )}
+
             {selected && selectedEntry ? (
               displayDate && selectedEntry.rainfall_24h !== undefined ? (
                 <ReplayDetail d={selectedEntry} onClose={() => setSelected(null)} />
@@ -356,7 +471,11 @@ export default function App() {
 
       <footer className="footer">
         <div className="footer-row">
-          <span>Heuristic-label validation phase — see README before quoting risk numbers.</span>
+          <span>
+            Experimental rainfall-risk guidance — not a flood forecast, not
+            inundation, not an evacuation order. Verify with official sources.
+            {health && <span className="mono ml-2">v{health.version}</span>}
+          </span>
           <span>Rainfall: Open-Meteo · Imagery: Esri / CARTO · OSM contributors</span>
         </div>
       </footer>

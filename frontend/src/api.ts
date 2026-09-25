@@ -1,6 +1,17 @@
 export const API_URL =
   import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
+export interface Provenance {
+  mode: string;
+  mode_note: string;
+  source: string;
+  as_of: string | null;
+  age_hours: number | null;
+  is_stale: boolean;
+  freshness_warning: boolean;
+  stale_threshold_hours: number;
+}
+
 export interface DistrictRisk {
   station_id: string;
   district: string;
@@ -17,6 +28,7 @@ export interface DistrictRisk {
   p72: number;
   as_of: string | null;
   source: string;
+  provenance?: Provenance;
   /* present in replay mode only */
   observed_date?: string;
   rainfall_24h?: number;
@@ -47,6 +59,57 @@ export interface DistrictDetail {
   drivers?: Drivers | null;
 }
 
+export interface HealthStatus {
+  status: string;
+  mode?: string;
+  mode_note?: string;
+  model_loaded: boolean;
+  calibration_loaded: boolean;
+  calibration_status?: string;
+  version: string;
+  stations: number;
+}
+
+export interface ModelInfo {
+  model_type: string;
+  version: string;
+  mode?: string;
+  window_days: number;
+  horizons: number[];
+  calibration: string;
+  label_source?: string;
+  training_split: string;
+  model_loaded: boolean;
+  n_seq_features?: number;
+  n_static_features?: number;
+}
+
+export interface ModelMetrics {
+  split?: string;
+  n?: number;
+  f1_24h?: number;
+  precision_24h?: number;
+  recall_24h?: number;
+  brier_24h?: number;
+  f1_48h?: number;
+  precision_48h?: number;
+  recall_48h?: number;
+  brier_48h?: number;
+  f1_72h?: number;
+  precision_72h?: number;
+  recall_72h?: number;
+  brier_72h?: number;
+}
+
+export interface EvidenceResult {
+  district: string;
+  station_id: string;
+  risk: { p24: number; p48: number; p72: number; tier24: number; tier48: number; tier72: number };
+  data_quality: { source: string; as_of: string };
+  drivers?: Drivers | { [k: string]: number | null } | null;
+  model_status: string;
+}
+
 async function get<T>(path: string): Promise<T> {
   const r = await fetch(`${API_URL}${path}`);
   if (!r.ok) throw new Error(`${path}: ${r.status}`);
@@ -54,9 +117,22 @@ async function get<T>(path: string): Promise<T> {
 }
 
 export const fetchMap = () =>
-  get<{ districts: DistrictRisk[]; legend: [string, string][]; impact: ImpactSummary }>(
+  get<{ districts: DistrictRisk[]; legend: [string, string][]; impact: ImpactSummary } &
+    { mode?: string; mode_note?: string; stale_count?: number }>(
     "/api/risk/map",
   );
+
+export const fetchHealth = () =>
+  get<HealthStatus>("/api/health");
+
+export const fetchModelInfo = () =>
+  get<ModelInfo>("/api/model/info");
+
+export const fetchModelMetrics = () =>
+  get<ModelMetrics>("/api/model/metrics");
+
+export const fetchEvidence = (district: string) =>
+  get<EvidenceResult>(`/api/risk/${encodeURIComponent(district)}/evidence`);
 
 export interface ReplayEvent {
   date: string;
@@ -126,5 +202,15 @@ export async function subscribe(phone: string, district: string) {
     const e = await r.json().catch(() => null);
     throw new Error(e?.detail?.[0]?.msg ?? "subscription failed");
   }
+  return r.json();
+}
+
+export async function unsubscribe(phone: string, district: string) {
+  const r = await fetch(`${API_URL}/api/alerts/unsubscribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone, district }),
+  });
+  if (!r.ok) throw new Error("unsubscribe failed");
   return r.json();
 }

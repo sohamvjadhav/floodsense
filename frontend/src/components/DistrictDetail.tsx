@@ -3,17 +3,23 @@ import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ReferenceLine,
   ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis,
 } from "recharts";
-import type { DistrictDetail as Detail } from "../api";
-import { fetchDistrict, runScenario, type ScenarioResult } from "../api";
+import type { DistrictDetail as Detail, EvidenceResult } from "../api";
+import { fetchDistrict, fetchEvidence, runScenario, type ScenarioResult } from "../api";
 import { tierHex, useChartTheme, useTheme, pct } from "../theme";
 
 const TIER_LABEL = ["Low", "Medium", "High", "Severe"];
 const BAND = ["band-low", "band-medium", "band-high", "band-severe"];
 const TIER_GUIDANCE = [
-  "No action needed — conditions are within normal range.",
-  "Monitor updates; avoid waterlogged routes and riverbank walks.",
-  "Prepare: move vehicles and valuables to higher ground; stay clear of rivers.",
-  "EVACUATE low-lying areas now and follow official instructions.",
+  "No action needed — conditions are within normal range. Experimental guidance only.",
+  "Monitor updates; avoid waterlogged routes. Verify with official sources.",
+  "Prepare: move vehicles and valuables to higher ground; stay clear of rivers. Verify with official sources.",
+  "High rainfall-risk (experimental). Contact local authorities and follow ONLY official instructions.",
+];
+const TIER_GUIDANCE_MR = [
+  "सध्या कारवाईची गरज नाही. केवळ प्रायोगिक मार्गदर्शन.",
+  "अद्यतने पाहत राहा; पाणी साचलेले रस्ते टाळा. अधिकृत सूचनांची खात्री करा.",
+  "तयारी ठेवा: वाहने/मौल्यवान वस्तू हलवा; नदीकाठ टाळा. अधिकृत सूचनांची खात्री करा.",
+  "जास्त पर्जन्य-जोखीम (प्रायोगिक). स्थानिक प्रशासनाशी संपर्क साधा; केवळ अधिकृत सूचनांचे पालन करा.",
 ];
 
 const inr = new Intl.NumberFormat("en-IN", { notation: "compact", compactDisplay: "short" });
@@ -49,6 +55,7 @@ export default function DistrictDetail({
   const [whatIf, setWhatIf] = useState(100);
   const [scenario, setScenario] = useState<ScenarioResult | null>(null);
   const [scBusy, setScBusy] = useState(false);
+  const [evidence, setEvidence] = useState<EvidenceResult | null>(null);
   const { theme } = useTheme();
   const hex = tierHex(theme === "dark");
   const { axis, grid, tooltipBg, tooltipBorder, tooltipFg } = useChartTheme();
@@ -57,10 +64,14 @@ export default function DistrictDetail({
     setData(null);
     setErr(null);
     setScenario(null);
+    setEvidence(null);
     let live = true;
     fetchDistrict(district)
       .then((d) => live && setData(d))
       .catch((e) => live && setErr(String(e)));
+    fetchEvidence(district)
+      .then((e) => live && setEvidence(e))
+      .catch(() => {});
     return () => { live = false; };
   }, [district]);
 
@@ -123,7 +134,23 @@ export default function DistrictDetail({
 
       <div className="explain-text mt-4">
         <strong>What to do: </strong>{TIER_GUIDANCE[t.tier24]}
+        <br /><span className="text-fg-muted">काय करावे: {TIER_GUIDANCE_MR[t.tier24]}</span>
+        <br /><span className="text-fg-muted">Experimental guidance — not an official warning. अधिकृत सूचना नाही.</span>
       </div>
+
+      {evidence && (
+        <div className="mt-3 rounded-[var(--r-md)] border border-line bg-surface-2 p-3">
+          <div className="flex items-center gap-3 text-[11px]">
+            <span className="flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${evidence.model_status === "model" ? "bg-green-500" : "bg-amber-500"}`} />
+              <span className="text-fg-muted">source:</span>
+              <span className="mono font-semibold">{evidence.model_status}</span>
+            </span>
+            <span className="text-fg-subtle">·</span>
+            <span className="text-fg-muted">data as of {evidence.data_quality.as_of}</span>
+          </div>
+        </div>
+      )}
 
       <div className="kv">
         <div className="kv-row"><span className="k">risk +24h</span>
@@ -175,10 +202,38 @@ export default function DistrictDetail({
         </>
       )}
 
+      {evidence?.drivers && typeof evidence.drivers === "object" && !Array.isArray(evidence.drivers) && (
+        <>
+          <h4 className="section-h">Risk drivers (observed rainfall context)</h4>
+          <div className="grid gap-1.5">
+            {Object.entries(evidence.drivers as Record<string, number | null>).map(([k, v]) => (
+              <div key={k} className="flex items-start gap-2 text-[12px]">
+                <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-accent" />
+                <span className="text-fg-muted mono">{k}: {v ?? "—"}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       <h4 className="section-h">
-        What-if simulator — hypothetical rain tomorrow
+        Scenario lab — hypothetical rain tomorrow
       </h4>
       <div className="rounded-[var(--r-md)] border border-line bg-surface-2 p-3">
+        <div className="mb-2.5 flex flex-wrap gap-1.5">
+          {[50, 100, 150, 200, 300].map((mm) => (
+            <button
+              key={mm}
+              onClick={() => setWhatIf(mm)}
+              className={`chip cursor-pointer !py-0.5 transition-colors
+                          ${whatIf === mm
+                            ? "!border-transparent !bg-accent !text-accent-fg"
+                            : "hover:border-line-strong"}`}
+            >
+              {mm}mm
+            </button>
+          ))}
+        </div>
         <div className="flex items-center gap-3">
           <input
             type="range" min={0} max={300} step={10}
@@ -194,26 +249,38 @@ export default function DistrictDetail({
         </div>
         {scenario && !scBusy && (
           <div className="mt-2.5 grid grid-cols-3 gap-2">
-            {[["+24h", scenario.baseline.tier24, scenario.scenario.tier24, scenario.scenario.p24],
-              ["+48h", scenario.baseline.tier48, scenario.scenario.tier48, scenario.scenario.p48],
-              ["+72h", scenario.baseline.tier72, scenario.scenario.tier72, scenario.scenario.p72],
-            ].map(([h, from, to, p]) => (
-              <div key={h as string} className="rounded-md border border-line bg-surface px-2 py-1.5 text-center">
-                <p className="mono text-[10px] text-fg-subtle">{h}</p>
-                <div className="mt-1 flex items-center justify-center gap-1">
-                  <span className={`band ${BAND[from as number]}`}>{TIER_LABEL[from as number][0]}</span>
-                  <span className="text-fg-subtle">→</span>
-                  <span className={`band ${BAND[to as number]}`}>{TIER_LABEL[to as number][0]}</span>
+            {[["+24h", scenario.baseline.tier24, scenario.scenario.tier24, scenario.scenario.p24, scenario.baseline.p24],
+              ["+48h", scenario.baseline.tier48, scenario.scenario.tier48, scenario.scenario.p48, scenario.baseline.p48],
+              ["+72h", scenario.baseline.tier72, scenario.scenario.tier72, scenario.scenario.p72, scenario.baseline.p72],
+            ].map(([h, from, to, p, p0]) => {
+              const dPts = Math.round(((p as number) - (p0 as number)) * 100);
+              const tierJump = (to as number) > (from as number);
+              return (
+                <div key={h as string}
+                     className={`rounded-md border bg-surface px-2 py-1.5 text-center ${
+                       tierJump ? "border-orange-400/60" : "border-line"
+                     }`}>
+                  <p className="mono text-[10px] text-fg-subtle">{h}</p>
+                  <div className="mt-1 flex items-center justify-center gap-1">
+                    <span className={`band ${BAND[from as number]}`}>{TIER_LABEL[from as number][0]}</span>
+                    <span className="text-fg-subtle">→</span>
+                    <span className={`band ${BAND[to as number]}`}>{TIER_LABEL[to as number][0]}</span>
+                  </div>
+                  <p className="mono mt-1 text-[10.5px] font-semibold">{pct(p as number, 0)}</p>
+                  {dPts !== 0 && (
+                    <p className="mono text-[9.5px]" style={{ color: dPts > 0 ? "#F0854D" : "#3FD4BC" }}>
+                      {dPts > 0 ? "+" : ""}{dPts} pts
+                    </p>
+                  )}
                 </div>
-                <p className="mono mt-1 text-[10.5px] text-fg-muted">{pct(p as number, 0)}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
         <p className="mt-2 text-[10.5px] leading-relaxed text-fg-subtle">
-          The model window is extended by one hypothetical day with this much
-          rain; upstream lags hold at last-known values. A planning tool for
-          drills — not a forecast of that rain occurring.
+          Simulated scenario — not an official forecast. The model window is
+          extended by one hypothetical day with this much rain; upstream lags
+          hold at last-known values. A planning tool for drills.
         </p>
       </div>
 

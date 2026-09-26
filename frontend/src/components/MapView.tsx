@@ -328,6 +328,10 @@ export default function MapView({
                     </span>
                     <span className="mono text-[10px] text-fg-subtle">at +{horizon}h</span>
                   </div>
+                  <div className="mt-1.5 flex items-center gap-1.5 text-[10px]">
+                    <span className={`h-1 w-1 rounded-full ${d.source === "model" ? "bg-green-500" : "bg-amber-500"}`} />
+                    <span className="text-fg-subtle mono">{d.source}</span>
+                  </div>
                   {d.rainfall_24h !== undefined && (
                     <p className="mono mt-2 rounded-md bg-surface-2 px-2 py-1 text-[11px]">
                       observed {d.rainfall_24h}mm/24h

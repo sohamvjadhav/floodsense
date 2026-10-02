@@ -1,0 +1,6 @@
+# Event Verification Log
+# Each row documents a verified flood event used for label construction.
+# Add rows as events are sourced from INDOFLOODS, CWC, or media reports.
+event_id,source_name,source_url_or_reference,district_or_station_id,basin,event_start_date,event_end_date,event_onset_date,location_precision,evidence_type,verified_by,confidence,notes,label_24h,label_48h,label_72h
+EVT_MH_PGH_2026_07,INDOFLOODS,https://hydrosense.iitd.ac.in/resources/,Palghar,Konkan,2026-07-22,2026-07-25,2026-07-23,district,media,manual_verification,high,283mm in 24h as recorded in dataset,1,1,1
+EVT_MH_KOP_2024_06,INDOFLOODS,https://hydrosense.iitd.ac.in/resources/,Kolhapur,Krishna,2024-06-08,2024-06-11,2024-06-09,district,media,manual_verification,high,242mm in 24h monsoon-onset floods,1,1,1

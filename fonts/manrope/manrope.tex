@@ -1,0 +1,25 @@
+% Manrope diagram font for the FloodSense synopsis.
+% Compile the main file with XeLaTeX (Overleaf: Menu -> Compiler -> XeLaTeX),
+% run twice for the TOC. Provides \Manrope, which \fsfont aliases.
+\usepackage{fontspec}
+\IfFileExists{./fonts/manrope/Manrope-Regular.ttf}{%
+  % Static weights (preferred): Regular / SemiBold / Bold.
+  \newfontfamily\Manrope{Manrope}[%
+    Path = ./fonts/manrope/,%
+    Extension = .ttf,%
+    UprightFont = *-Regular,%
+    BoldFont = *-Bold,%
+    FontFace = {sb}{n}{*-SemiBold}%
+  ]%
+}{%
+  % Fallback: single variable file, semibold faked from bold.
+  \newfontfamily\Manrope{Manrope-VariableFont_wght}[%
+    Path = ./fonts/manrope/,%
+    Extension = .ttf,%
+    UprightFont = *,%
+    BoldFont = *,%
+    AutoFakeBold = 1.6,%
+    Scale = MatchLowercase
+  ]%
+  \DeclareFontSeriesDefault[tu]{sb}{b}%
+}

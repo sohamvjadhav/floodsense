@@ -1,0 +1,1123 @@
+\documentclass[a4paper,12pt]{report}
+\usepackage[T1]{fontenc}
+\usepackage{mathptmx}
+% Manrope diagram font: used automatically when fonts/manrope/ is uploaded
+% alongside this file (compile with XeLaTeX); otherwise falls back silently.
+\IfFileExists{fonts/manrope/manrope.tex}{%
+  \input{fonts/manrope/manrope.tex}%
+}{%
+  \newcommand{\Manrope}{}%
+}
+\usepackage[hidelinks]{hyperref}
+\usepackage{graphicx}
+\usepackage[a4paper, top=2.5cm, bottom=2.5cm, left=3cm, right=2cm]{geometry}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows, arrows.meta, shapes.geometric, calc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+\usepackage{setspace}
+\usepackage{eso-pic}
+\usepackage{tocloft}
+\usepackage{titlesec} % Added to cleanly format chapter headings
+
+% --- Professional Alignment & Vertical Space Fixes ---
+\raggedbottom
+\renewcommand{\baselinestretch}{1.2}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.5em}
+
+% --- Single-Line Chapter Heading Format (e.g., "3. Introduction") ---
+\titleformat{\chapter}[hang]{\Huge\bfseries}{\thechapter.\quad}{0pt}{}
+\titlespacing*{\chapter}{0pt}{0pt}{20pt}
+
+% --- TOC Formatting to MATCH THE IMAGE EXACTLY ---
+\renewcommand{\contentsname}{Contents}
+\renewcommand{\cfttoctitlefont}{\Huge\bfseries\centering}
+\renewcommand{\cftaftertoctitle}{}
+
+% Add dots after chapter numbers (e.g., "1. Title Page")
+\renewcommand{\cftchapaftersnum}{.}
+\setlength{\cftchapnumwidth}{1.8em} % Give space for the number and dot
+
+% Font weights
+\renewcommand{\cftchapfont}{\bfseries\large}
+\renewcommand{\cftsecfont}{\normalfont}
+\renewcommand{\cftchappagefont}{\bfseries\large}
+\renewcommand{\cftsecpagefont}{\normalfont}
+
+% Dot leaders for BOTH chapters and sections (matching the image)
+\renewcommand{\cftchapdotsep}{\cftdotsep}
+\renewcommand{\cftsecdotsep}{\cftdotsep}
+
+\setlength{\cftbeforechapskip}{0.8em}
+\setlength{\cftchapindent}{0pt}
+\setlength{\cftsecindent}{1.5em}
+
+% --- Page Numbering Centered via Absolute Physical Page Coordinates ---
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\tikz[remember picture,overlay] \node at ([yshift=1.75cm]current page.south) {\thepage};}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancypagestyle{plain}{%
+  \fancyhf{}
+  \fancyfoot[C]{\tikz[remember picture,overlay] \node at ([yshift=1.75cm]current page.south) {\thepage};}
+  \renewcommand{\headrulewidth}{0pt}
+  \renewcommand{\footrulewidth}{0pt}
+}
+
+% --- Border Overlay ---
+\AddToShipoutPictureBG{%
+  \begin{tikzpicture}[remember picture, overlay]
+    \draw[line width=0.5pt, black]
+      ([xshift=1cm,yshift=-1cm]current page.north west)
+      rectangle
+      ([xshift=-1cm,yshift=1cm]current page.south east);
+  \end{tikzpicture}
+}
+
+\newcommand{\HRule}{\rule{\textwidth}{1pt}}
+
+\newcommand{\fsfont}{\Manrope}
+
+\definecolor{fsNavy}{HTML}{17324D}
+\definecolor{fsTeal}{HTML}{007F86}
+\definecolor{fsBlue}{HTML}{326CB0}
+\definecolor{fsAmber}{HTML}{B97412}
+\definecolor{fsRed}{HTML}{B54249}
+\definecolor{fsMuted}{HTML}{526779}
+\definecolor{fsLine}{HTML}{CCD9E2}
+\definecolor{fsPale}{HTML}{F2F6F9}
+\tikzset{
+  fs/card/.style={rectangle, rounded corners=3pt, draw=fsLine,
+    fill=white, line width=0.65pt, inner sep=7pt, align=left},
+  fs/dark/.style={fs/card, fill=fsNavy, draw=fsNavy, text=white},
+  fs/teal/.style={fs/card, fill=fsTeal!7, draw=fsTeal!40},
+  fs/blue/.style={fs/card, fill=fsBlue!6, draw=fsBlue!35},
+  fs/amber/.style={fs/card, fill=fsAmber!8, draw=fsAmber!40},
+  fs/flow/.style={-{Stealth[length=2.2mm,width=1.5mm]},
+    draw=fsTeal, line width=0.95pt, rounded corners=3pt},
+  fs/link/.style={draw=fsLine, line width=0.8pt},
+  fs/label/.style={font=\fsfont\fontseries{sb}\fontsize{8}{10}\selectfont,
+    text=fsMuted, align=left},
+  fs/note/.style={font=\fsfont\fontsize{8}{10}\selectfont,
+    text=fsMuted, align=left},
+  fs/badge/.style={circle, fill=fsTeal, text=white, inner sep=0pt,
+    minimum size=6mm, font=\fsfont\fontseries{sb}\fontsize{9}{10}\selectfont}
+}
+\newenvironment{fsdiagram}[1][]{%
+  \setstretch{1}\setlength{\parskip}{0pt}
+  \begin{tikzpicture}[font=\fsfont\fontsize{10}{12}\selectfont,
+    text=fsNavy, y=0.85cm, line cap=round, line join=round, #1]
+}{\end{tikzpicture}}
+\newcommand{\fshead}[2]{{\fontseries{sb}\selectfont #1}\\[3pt]{\fontsize{9}{11}\selectfont #2}}
+
+
+\begin{document}
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+% =================================================
+% 1. Title Page
+% =================================================
+\stepcounter{chapter} % Manually set Title Page as Chapter 1
+\addcontentsline{toc}{chapter}{\protect\numberline{\thechapter}Title Page}
+
+\newgeometry{top=2cm, bottom=2cm, left=1.8cm, right=1.8cm}
+\begin{titlepage}
+\thispagestyle{empty}
+\ClearShipoutPictureBG
+\begin{tikzpicture}[remember picture, overlay]
+    \draw[line width=0.5pt, black]
+      ([xshift=0.9cm,yshift=-0.9cm]current page.north west)
+      rectangle
+      ([xshift=-0.9cm,yshift=0.9cm]current page.south east);
+\end{tikzpicture}
+\begin{center}
+    \begingroup
+    \renewcommand{\baselinestretch}{1.05}\selectfont
+    \vspace*{1.2cm}
+
+    {\large \textbf{A Synopsis Report}}\\[0.1cm]
+    {\large \textbf{On}}\\[0.48cm]
+    {\fontsize{25pt}{26pt}\selectfont \textbf{\parbox{0.82\textwidth}{\centering FLOODSENSE: ML-BASED\\FLOOD EARLY WARNING\\SYSTEM FOR MAHARASHTRA}}}\\[1.4cm]
+
+    {\large \textit{\textbf{Submitted By}}}\\[0.4cm]
+    \makebox[0.76\textwidth][c]{%
+        \begin{tabular*}{0.76\textwidth}{@{\extracolsep{\fill}}lc}
+            {\large \textbf{Jadhav Soham}} & {\large \textbf{Seat No. \_\_\_}} \\[0.25cm]
+            {\large \textbf{Wawre Anjali}} & {\large \textbf{Seat No. \_\_\_}} \\[0.25cm]
+            {\large \textbf{Bhor Tanuja}} & {\large \textbf{Seat No. \_\_\_}}
+        \end{tabular*}%
+    }\\[0.8cm]
+
+    {\large \textbf{Under Guidance of}}\\[0.16cm]
+    {\Large \textbf{Prof. Jagdale S.V.}}\\[0.12cm]
+    {\large \textbf{(COMPUTER DEPARTMENT)}}\\[1.2cm]
+
+    \includegraphics[width=1.72in]{"SCOE&M copy.png"}\\[1.0cm]
+
+    {\Large \textbf{Department of Computer Engineering}}\\[0.82cm]
+    {\Large \textbf{SREIR's}}\\[0.15cm]
+    {\Large \textbf{SAMARTH COLLEGE OF ENGINEERING}}\\[0.08cm]
+    {\Large \textbf{AND MANAGEMENT, BELHE}}\\[0.28cm]
+    {\Large \textbf{2026-2027}}
+    \endgroup
+\end{center}
+\end{titlepage}
+
+\AddToShipoutPictureBG{%
+  \begin{tikzpicture}[remember picture, overlay]
+    \draw[line width=0.5pt, black]
+      ([xshift=1cm,yshift=-1cm]current page.north west)
+      rectangle
+      ([xshift=-1cm,yshift=1cm]current page.south east);
+  \end{tikzpicture}
+}
+\restoregeometry
+
+% -------------------------------------------------
+% Certificate (hidden from TOC, per department format)
+% -------------------------------------------------
+\newpage
+\newgeometry{top=2cm, bottom=2cm, left=1.8cm, right=1.8cm}
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{center}
+\begingroup
+\renewcommand{\baselinestretch}{1.05}\selectfont
+\vspace*{0.55cm}
+
+{\Large \textbf{SREIR's}}\\[0.2cm]
+{\Large \textbf{SAMARTH COLLEGE OF ENGINEERING}}\\[0.1cm]
+{\Large \textbf{AND MANAGEMENT, BELHE}}\\[0.28cm]
+{\large \textbf{Department of Computer Engineering}}\\[0.58cm]
+
+\includegraphics[width=1.55in]{"SCOE&M copy.png"}\\[0.8cm]
+
+{\fontsize{18pt}{20pt}\selectfont \textbf{\textit{Certificate}}}\\[0.48cm]
+
+{\large \textit{This is to certify that}}\\[0.55cm]
+
+\makebox[0.74\textwidth][c]{%
+    \begin{tabular*}{0.74\textwidth}{@{\extracolsep{\fill}}lc}
+        {\large \textbf{Jadhav Soham}} & {\large \textbf{Seat No. \_\_\_}} \\[0.25cm]
+        {\large \textbf{Wawre Anjali}} & {\large \textbf{Seat No. \_\_\_}} \\[0.25cm]
+        {\large \textbf{Bhor Tanuja}} & {\large \textbf{Seat No. \_\_\_}}
+    \end{tabular*}%
+}\\[0.45cm]
+
+{\normalsize \parbox{0.86\textwidth}{\centering
+of B.E. Computer Engineering have successfully completed the\\
+Synopsis Report titled
+}}\\[0.32cm]
+
+{\Large \textbf{FLOODSENSE: ML-BASED FLOOD EARLY WARNING SYSTEM FOR MAHARASHTRA}}\\[0.48cm]
+
+{\normalsize \parbox{0.86\textwidth}{\centering
+towards the partial fulfillment for the requirements of the Bachelor Degree of\\
+Engineering course under the University of Pune during the academic year 2026-2027.
+}}
+
+\vspace{2.2cm}
+
+\noindent
+\begin{minipage}[t]{0.42\textwidth}
+\raggedright
+\textbf{Prof. Jagdale S.V.}\\
+(Project Guide)
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.42\textwidth}
+\raggedleft
+\textbf{Prof. Thitme V.V.}\\
+(Project Coordinator)
+\end{minipage}
+
+\vspace{1.4cm}
+
+\noindent
+\begin{minipage}[t]{0.42\textwidth}
+\raggedright
+\textbf{Prof. Shegar S. R.}\\
+(H.O.D)
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.42\textwidth}
+\raggedleft
+\textbf{Dr. Narawade N. S.}\\
+Principal
+\end{minipage}
+\endgroup
+\end{center}
+\end{titlepage}
+\restoregeometry
+
+% =================================================
+% Acknowledgement
+% =================================================
+\chapter*{Acknowledgement}
+\addcontentsline{toc}{chapter}{Acknowledgement}
+The completion of a project is a milestone in student life and its execution is inevitable in the hands of the guide. We are highly indebted to our project guide \textbf{Prof. Jagdale S.V.} and Project Coordinator \textbf{Prof. Thitme V.V.}, for their valuable guidance and appreciation in giving form and substance to this report and project. It is due to their enduring efforts, patience, and enthusiasm which has given a sense of direction and purposefulness to this project and ultimately made it a success.
+
+This project sits at the intersection of deep learning, hydrology-inspired feature design, and field-usable software engineering. At every stage --- from framing flood prediction as a lead-time forecasting problem, to designing the upstream propagation signal, to carrying the same officer workflow across web and Android --- our guide's insistence on honest evaluation over impressive numbers shaped the work. The principle that every metric must be traceable, every placeholder declared, and every warning explainable comes directly from that guidance.
+
+We would like to tender our sincere thanks to the staff members and H.O.D.\ \textbf{Prof. Shegar S. R.} for their co-operation and for providing the departmental infrastructure on which the system was built and tested. We would like to express our deep regards and gratitude to the Principal \textbf{Dr. Narawade N. S.} for fostering an environment in which practice-oriented, socially relevant projects are encouraged. We are also thankful to our parents for promoting and motivating us regarding our project development, and to our classmates for many long discussions on modelling choices, interface design, and evaluation discipline that improved this work in ways large and small.
+
+We would wish to thank the non-teaching staff who have helped us all the way in one way or the other. It is highly impossible to repay the debt of all the people who have directly or indirectly helped us in performing the project. Finally, we would like to thank all the staff members of the Computer Engineering Department who helped us directly or indirectly to complete this work successfully.
+
+% =================================================
+% Abstract
+% =================================================
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+Maharashtra faces recurring monsoon floods that damage infrastructure, displace communities, and strain disaster-response capacity. Existing operational tools --- IMD district warnings, Central Water Commission gauge bulletins, and weather applications --- report rainfall amounts but do not provide calibrated, location-specific flood risk with actionable lead time. District officers therefore decide from raw rainfall figures and static thresholds, without forward-looking probabilities, upstream context, or explanations of why an area is flagged.
+
+The objective of this project is to build \textbf{FloodSense}, a machine-learning decision-support system that forecasts district-level rainfall risk 24, 48, and 72 hours in advance across 35 districts in the Godavari, Tapi, Konkan, and Krishna basins. A GRU sequence network reviews the last seven days of rainfall, multi-day accumulations, and lagged upstream-neighbour signals per district; its outputs are served as \textbf{experimental rainfall-risk guidance} in Low, Medium, High, and Severe provisional quantile tiers (isotonic calibration is currently disabled pending re-validation). Controlled ablation against same-day baselines --- including a stacked ensemble reference --- quantifies the contribution of the upstream propagation features and establishes that the sequence framing, not merely the feature set, produces the warning lead time.
+
+The methodology spans data unification from open rainfall archives with explicit quality flags, baseline construction, sequence modelling under strict chronological splits with a 10-day embargo and a no-present-input discipline, provisional quantile tiering, and delivery through a single FastAPI service to a web dashboard, an Android field application, and controlled WhatsApp alerts, supported by historical replay and what-if scenario tools for training and drill planning. The expected outcome is a working prototype demonstrating genuine lead-time behaviour --- test F1 scores of 0.75, 0.64, and 0.57 at 24, 48, and 72 hours (n=9520, embargoed folds) with precision in the 0.91--0.96 range --- with warnings shown rising days before peak rainfall on replayed events such as the Palghar July 2026 deluge, every flag explained against same-month climatology, and subscribed officers notified on escalation without alert fatigue. All outputs are experimental rainfall-risk indicators, not validated inundation probabilities; verified-event evaluation remains blocked pending daily gauge records.
+
+% =================================================
+% Table of Contents / Figures / Tables
+% =================================================
+\clearpage
+\setcounter{tocdepth}{0} % Limit TOC to chapters only
+\tableofcontents
+\clearpage
+\listoffigures
+\listoftables
+\clearpage
+
+% =================================================
+% Chapter 1: INTRODUCTION
+% =================================================
+\chapter{Introduction}
+\section{Background}
+Maharashtra's monsoon floods are a near-annual event. The state's four major drainage systems --- the east-flowing Godavari and Krishna, the west-flowing Tapi, and the short, steep west-flowing rivers of the Konkan coast --- respond to the same monsoon with very different flood behaviour: slow, wide inundation on the Deccan plateau; flash response in the Sahyadri foothills; and tide-complicated flooding along the coast. Thirty-five districts (one modelling station each; Mumbai City and Suburban merged) form the pilot geography of this project, and Table~\ref{tab:basins} summarises their distribution.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{3.2cm}|c|X|}
+\hline
+\textbf{Basin} & \textbf{Districts} & \textbf{Character} \\ \hline
+Godavari & 17 & Large east-flowing system with tributary chains \\ \hline
+Tapi & 7 & West-flowing, Purna sub-basin included \\ \hline
+Konkan & 6 & Short coastal rivers, steep and flashy \\ \hline
+Krishna & 5 & East-flowing, dam-influenced headwaters \\ \hline
+\end{tabularx}
+\caption{Pilot coverage across the four basins}
+\label{tab:basins}
+\end{table}
+
+Disaster management in these districts depends today on rainfall-category warnings and river-gauge bulletins that describe the present far better than they anticipate the next one to three days. FloodSense is built on the observation that the raw material for better warnings --- open rainfall archives, district geography, and river topology --- already exists, and that the missing piece is a calibrated forecasting layer with an officer-usable interface.
+
+\section{Importance and Relevance}
+Every additional hour of reliable warning lets officers verify local gauges, pre-position pumps and boats, warn low-lying settlements, and stage relief supplies. False alarms are costly too: repeated over-warning erodes trust until real warnings are ignored. A system that converts already-available open rainfall data into calibrated district risk --- without new sensors, proprietary feeds, or per-district manual tuning --- is therefore immediately deployable and directly relevant to current practice. Its relevance extends beyond Maharashtra: the same pipeline applies to any region with gridded rainfall history and an approximate station topology.
+
+\section{Target Domain and Application Area}
+The primary users are district disaster-management officers deciding whether to increase monitoring or escalate a warning; citizens are secondary beneficiaries through opt-in WhatsApp alerts. The application area spans five engineering domains: data engineering (open-archive ingestion and unification), deep learning (sequence forecasting under temporal discipline), statistical calibration (tiered warnings under extreme class imbalance), full-stack service delivery (API, scheduler, database), and mobile field computing (offline-tolerant Android access).
+
+\section{Core Idea in One Figure}
+\begin{figure}[H]
+\centering
+\begin{fsdiagram}
+\node[fs/label, anchor=west] at (0,0.3) {FROM SAME-DAY LABELS TO ADVANCE WARNING};
+\fill[fsPale, rounded corners=4pt] (0,-0.25) rectangle (15.2,-4.4);
+\draw[fs/link, dashed] (8.5,-0.55) -- (8.5,-3.85);
+\node[fs/label, align=center] at (8.5,-0.65) {ISSUE\\TIME $t$};
+\node[fs/card, text width=3.15cm, anchor=west] at (0.3,-1.55)
+  {\fshead{Conventional}{Classify today}};
+\node[fs/amber, text width=2.3cm, align=center] (today) at (6.5,-1.55) {Today's rainfall};
+\node[fs/amber, text width=3.8cm, align=center] (same) at (11.7,-1.55)
+  {\fshead{Same-day label}{No advance warning window}};
+\draw[fs/flow, draw=fsAmber] (today) -- (same);
+\node[fs/dark, text width=3.15cm, anchor=west] at (0.3,-3.4)
+  {\fshead{FloodSense}{Forecast ahead}};
+\node[fs/teal, text width=2.3cm, align=center] (past) at (6.5,-3.4)
+  {\fshead{7-day history}{$[t-7,\,t-1]$}};
+\foreach \horizon/\position in {24/9.6,48/11.65,72/13.7} {
+  \node[fs/teal, minimum width=1.65cm, minimum height=0.85cm,
+    align=center] (h\horizon) at (\position,-3.4) {\textbf{+\horizon h}};
+}
+\draw[fs/flow] (past) -- (h24);
+\draw[fs/flow] (h24) -- (h48);
+\draw[fs/flow] (h48) -- (h72);
+\node[fs/note, anchor=west] at (0.25,-4.8)
+  {Past-only inputs \quad / \quad Three forecast horizons \quad / \quad Time to prepare before impact};
+\end{fsdiagram}
+\caption{Same-day classification versus lead-time forecasting}
+\label{fig:leadtime}
+\end{figure}
+
+\section{Organisation of This Synopsis}
+Chapter~2 states the problem and research question; Chapter~3 lists objectives; Chapter~4 bounds the scope; Chapter~5 surveys existing systems; Chapter~6 presents the proposed solution; Chapter~7 details the architecture; Chapter~8 describes the six modules; Chapter~9 records the technology stack; Chapter~10 explains the methodology; Chapter~11 states expected outcomes; Chapter~12 gives the timeline; Chapter~13 lists future enhancements.
+
+% =================================================
+% Chapter 2: PROBLEM STATEMENT
+% =================================================
+\chapter{Problem Statement}
+\section{Problem Description}
+District officers make monitoring and escalation decisions from raw rainfall amounts, static danger-level thresholds, and personal judgment. This process provides no probability of flood-risk onset within an actionable window, no view of upstream rainfall moving downstream, no explanation of why a district is flagged, and no structured path from first signal to escalation. The consequence is late, unverifiable, or mistrusted warnings.
+
+\section{Why the Problem Matters}
+Flood losses concentrate where warnings arrive late or unverified. Static thresholds applied uniformly across heterogeneous basins over-alert in some districts and miss events in others, eroding officer trust with every false alarm. A warning that states \textit{what} (tier), \textit{when} (horizon), and \textit{why} (ranked reasons with stated confidence) is the missing instrument between a rainfall number and a defensible operational decision.
+
+\section{Stakeholders}
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{3.6cm}|X|}
+\hline
+\textbf{Stakeholder} & \textbf{Need} \\ \hline
+District officers & Tiered risk with horizon, reasons, and recommended actions \\ \hline
+Control-room staff & Statewide queue ranked by urgency; replay for briefings \\ \hline
+Citizens & Simple opt-in alerts with clear protective guidance \\ \hline
+Evaluators / researchers & Reproducible metrics, ablations, and declared limitations \\ \hline
+\end{tabularx}
+\caption{Stakeholders and their needs}
+\label{tab:stakeholders}
+\end{table}
+
+\section{Challenges in Solving It}
+The challenges are: (i) forecasting rather than classifying, so the model must never see current or future inputs; (ii) encoding river-basin propagation without official catchment maps; (iii) calibrating probabilities under $\sim$1\% positive rates so tiers stay meaningful; (iv) delivering to low-connectivity field conditions through tolerant clients; and (v) remaining honest about proxy labels and placeholder hydrological inputs until verified data is integrated.
+
+\section{Research Question}
+\textit{Can recent rainfall accumulation together with upstream spatial-lag features improve the timing and usefulness of district-level flood-risk warnings, compared with static rainfall thresholds and conventional machine-learning baselines?}
+
+\section{Problem Formalisation}
+\begin{figure}[H]
+\centering
+\begin{fsdiagram}
+\node[fs/label, anchor=west] at (0,0.5) {FORECASTING TASK \ / \ INPUTS AND OUTPUTS};
+\node[fs/blue, text width=6.6cm, minimum height=1.5cm] (inp) at (3.9,-0.9)
+  {\fshead{Inputs (past only)}{7-day window: rainfall, 3/7-day sums, rain hours, upstream lag-1, upstream lag-2; plus elevation, lat, lon}};
+\node[fs/dark, text width=6.6cm, minimum height=1.5cm] (out) at (11.6,-0.9)
+  {\fshead{Outputs (future)}{P(risk within 24h), P(risk within 48h), P(risk within 72h) $\rightarrow$ Low / Medium / High / Severe}};
+\draw[fs/flow] (inp) -- (out);
+\node[fs/note, anchor=west, text width=14.4cm] at (0,-2.4)
+  {Hard constraint: nothing dated $t$ or later may enter the window ending at the cutoff. This single rule separates forecasting from classification.};
+\end{fsdiagram}
+\caption{Formal statement of the forecasting task}
+\label{fig:formal}
+\end{figure}
+
+% =================================================
+% Chapter 3: OBJECTIVES OF THE PROJECT
+% =================================================
+\chapter{Objectives of the Project}
+\begin{itemize}[leftmargin=1.2cm]
+    \item To build a unified daily district-level dataset (rainfall history, 3-day/7-day accumulations, upstream lags, basin geography) with explicit measured/interpolated quality flags.
+    \item To design and train a GRU sequence model forecasting flood-risk probability at 24, 48, and 72-hour horizons using only past observations.
+    \item To serve model outputs as provisional Low/Medium/High/Severe quantile tiers (isotonic calibration currently disabled pending re-validation).
+    \item To quantify upstream-feature contribution through controlled ablation (GRU-local vs.\ GRU-spatial) against same-day baselines.
+    \item To serve risk through a single FastAPI service with a 3-hour live refresh cycle and graceful fallback tiers.
+    \item To build a web dashboard: tier map, ranked risk queue, district case files, replay, scenarios, and subscriptions.
+    \item To build an Android field application mirroring map, queue, replay, and alerts with per-district case files.
+    \item To deliver controlled WhatsApp alerts firing only on escalation into High/Severe, with audit logging (cooldown pending).
+    \item To demonstrate warning lead time on real past events through historical replay and drill scenarios.
+\end{itemize}
+
+\section{Objective Traceability}
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{|c|X|X|}
+\hline
+\textbf{Objective} & \textbf{Module} & \textbf{Evidence} \\ \hline
+Dataset \textemdash\ 1 \textemdash Unified CSV, manifest, quality flags \\ \hline
+Sequence model \textemdash\ 3 \textemdash Test F1 0.75 / 0.64 / 0.57 (n=9520, embargoed) \\ \hline
+Calibration \textemdash\ 3 \textemdash Provisional tier thresholds, alert-level F1 (isotonic disabled) \\ \hline
+Ablation \textemdash\ 3 \textemdash Local-vs-spatial comparison tables \\ \hline
+Service \textemdash\ 4 \textemdash 14 endpoints, refresh cycle, tests \\ \hline
+Web + Android \textemdash\ 5, 6 \textemdash Dashboard, APK, replay presets \\ \hline
+Alerts \textemdash\ 6 \textemdash Escalation-only firing, audit log \\ \hline
+Demonstration \textemdash\ 5, 6 \textemdash Six replay events, scenario lab \\ \hline
+\end{tabularx}
+\caption{Objectives traced to modules and evidence}
+\label{tab:trace}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{fsdiagram}[y=0.95cm]
+\node[fs/label, anchor=west] at (0,0.45) {FIVE STAGES \ / \ ONE DECISION-SUPPORT SYSTEM};
+\draw[draw=fsTeal!25, line width=3pt] (0.4,-0.45) -- (0.4,-5.85);
+\foreach \stage/\vertical/\title/\detail/\deliverable in {
+  1/-0.45/Build the evidence base/Unify rainfall records and establish baselines/Unified dataset,
+  2/-1.8/Learn and tier/Train sequence forecasts and assign provisional tiers/Model artifacts,
+  3/-3.15/Isolate the spatial signal/Compare local and upstream-aware variants/Ablation evidence,
+  4/-4.5/Deliver the warning/Connect web{,} Android{,} and controlled alerts/Operational prototype,
+  5/-5.85/Demonstrate lead time/Replay historical events and run what-if drills/Replay demonstration} {
+  \node[fs/badge] at (0.4,\vertical) {\stage};
+  \node[fs/card, text width=8.1cm, inner ysep=4pt, minimum height=1.02cm, anchor=west]
+    (stage\stage) at (1.1,\vertical) {\fshead{\title}{\detail}};
+  \node[fs/teal, text width=3.55cm, minimum height=1.02cm, anchor=west]
+    (deliver\stage) at (10.55,\vertical) {\deliverable};
+  \draw[fs/flow] (stage\stage) -- (deliver\stage);
+}
+\end{fsdiagram}
+\caption{Objective execution flow of the project}
+\label{fig:objectives}
+\end{figure}
+
+% =================================================
+% Chapter 4: SCOPE OF THE PROJECT
+% =================================================
+\chapter{Scope of the Project}
+\section{What the Project Covers}
+The Maharashtra pilot (35 districts, four basins); the full pipeline from open rainfall data to officer-facing warnings; web, Android, and WhatsApp delivery; replay and scenario tools for training, evaluation, and drills; and documented evaluation on chronological splits with calibration analysis. Every claim in the report traces to a computed artifact: a CSV, a JSON metric file, a test result, or a reviewed screen.
+
+\section{What the Project Does Not Cover}
+Guaranteed flood forecasting; automated evacuation advice; inundation or extent mapping; real-time river-gauge monitoring; dam-release, tidal, drainage, or soil-moisture modelling; and any claim of real-flood accuracy prior to evaluation on verified event labels. These exclusions are deliberate: each would require data or authority the prototype does not possess, and claiming them would mislead the officers the system is meant to serve.
+
+\section{Boundaries and Limitations}
+Training labels are currently a stated rainfall proxy (24h $\geq$ 115\,mm or 3-day $\geq$ 150\,mm), so metrics validate the pipeline rather than flood skill. River discharge and water level are zero placeholders pending gauge integration; the upstream neighbour map is an approximation, not an official catchment survey; district-headquarters coordinates proxy gridded rainfall, losing sub-district variation such as Western Ghats orographic effects; and a single model on a single chronological split with a 10-day embargo (no shared input or label days across folds) is reported, without ensembles or cross-validation.
+
+\section{Assumptions}
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{4.2cm}|X|}
+\hline
+\textbf{Assumption} & \textbf{Justification / check} \\ \hline
+Open-archive rainfall approximates gauge truth & Documented reanalysis basis; flagged per-day confidence \\ \hline
+HQ coordinates proxy district rainfall & Stated limitation; intra-district variation acknowledged \\ \hline
+Elevation-based upstream map suffices for v1 & Ablation measures its value; CWC map planned \\ \hline
+Proxy labels suffice for pipeline validation & Verified-event schema built for the swap \\ \hline
+\end{tabularx}
+\caption{Key assumptions and their handling}
+\label{tab:assumptions}
+\end{table}
+
+% =================================================
+% Chapter 5: LITERATURE SURVEY / EXISTING SYSTEM
+% =================================================
+\chapter{Literature Survey / Existing System}
+\section{Threshold and Statistical Systems}
+Classical rainfall-runoff and threshold models dominate operations: IMD rainfall categories and CWC gauge danger levels are interpretable and cheap, but rigid across heterogeneous basins and silent on lead-time probability. They answer whether a threshold was crossed, not what happens next.
+
+\section{Conventional Machine Learning}
+Academic studies apply random forests, support vector machines, logistic regression, and stacked ensembles to flood occurrence, typically classifying same-day labels from same-day features. These validate feature pipelines well but cannot, by construction, provide warning lead time --- the central gap this project addresses.
+
+\section{Sequence and Spatio-Temporal Models}
+Recurrent architectures (notably Kratzert et al.\ on LSTM rainfall-runoff modelling) showed sequence networks can learn catchment dynamics from meteorological series alone; GRUs offer comparable skill with fewer parameters, suiting a modest 5-year district dataset. Multi-lead-time framing follows ResTCN-DAM (Sheng et al., 2024) as inspiration only: FloodSense implements a smaller GRU under gauge-sparse, rainfall-only constraints and is not an extension of that work. Spatio-temporal literature further shows neighbouring-sensor information improves downstream prediction, motivating the lagged-neighbour features used here in deliberately simple, ablatable form.
+
+\section{Calibration for Warnings}
+Raw classifier scores miscalibrate under class imbalance ($\sim$1\% positives here). Post-hoc calibration via Platt scaling or isotonic regression, with quantile-based decision thresholds, is the established remedy. In the current build the isotonic maps are disabled in live inference pending re-validation (mixed Brier deltas), so the served tiers are provisional quantiles, explicitly marked as such.
+
+\section{Warnings as Communication}
+Operational literature stresses that warnings fail less on accuracy than on communication: tiered, explainable, workflow-integrated presentation determines whether a forecast changes decisions. This motivates the case-file interface, briefing-style replay cards, and the always-visible statement of data confidence and staleness.
+
+\section{Technologies and Methodologies in Use}
+IMD warnings use rainfall-category thresholds; CWC bulletins use gauge-level observations; prior academic prototypes use tabular classifiers with calibration. GRU sequence modelling with post-hoc tiering is the established modern combination this project adopts in structure, extended with an officer-centred delivery layer largely absent from prior work.
+
+\section{Gaps in Existing Systems}
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{3.4cm}|X|X|}
+\hline
+\textbf{Capability} & \textbf{Existing systems} & \textbf{FloodSense} \\ \hline
+Lead-time forecast & Same-day / nowcast only & 24 / 48 / 72-hour probabilities \\ \hline
+Upstream reasoning & Not shown & Lagged neighbour features \\ \hline
+Calibration & None & Provisional quantile tiers (isotonic disabled) \\ \hline
+Explanation & Raw numbers & Ranked reasons vs.\ climatology \\ \hline
+Replay / drills & Not available & Historical replay + scenarios \\ \hline
+Delivery & Web / bulletin & Web + Android + WhatsApp \\ \hline
+\end{tabularx}
+\caption{Gaps in existing systems addressed by the proposed work}
+\label{tab:existing}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{fsdiagram}[y=1.05cm]
+\node[fs/label, anchor=west] at (0,0.45) {IDENTIFIED GAP};
+\node[fs/label, anchor=west, text=fsTeal] at (8.25,0.45) {FLOODSENSE RESPONSE};
+\foreach \row/\vertical/\gap/\response/\detail in {
+  1/-0.45/Same-day classification/Forecast ahead/24{,} 48{,} and 72-hour risk horizons,
+  2/-1.9/Static threshold bulletins/Add spatial context/Probabilities informed by upstream lags,
+  3/-3.35/Uncalibrated model scores/Make risk interpretable/Provisional quantile tiers,
+  4/-4.8/Raw rainfall numbers/Support officer action/Explanations{,} case files{,} and replay} {
+  \node[fs/card, text width=5.75cm, minimum height=1.05cm, anchor=west]
+    (gap\row) at (0,\vertical) {\textbf{0\row}\quad \gap};
+  \node[fs/teal, text width=6.05cm, minimum height=1.05cm, anchor=west]
+    (response\row) at (8.25,\vertical) {\fshead{\response}{\detail}};
+  \draw[fs/flow] (gap\row) -- (response\row);
+}
+\node[fs/dark, text width=14.1cm, align=center] at (7.4,-6.25)
+  {\textbf{Earlier signals + provisional tiers + actionable evidence}};
+\end{fsdiagram}
+\caption{Literature gaps addressed by the proposed system}
+\label{fig:gaps}
+\end{figure}
+
+% =================================================
+% Chapter 6: PROPOSED SYSTEM
+% =================================================
+\chapter{Proposed System}
+\section{Planned Solution}
+FloodSense reframes prediction as lead-time risk forecasting with upstream propagation: a GRU over a 7-day window outputs 24/48/72h probabilities, provisional quantile tiers present them as Low/Medium/High/Severe guidance, and a single service delivers them with evidence, replay, and scenarios to web, Android, and WhatsApp clients.
+
+\section{How It Improves Over Existing Solutions}
+Multi-horizon probabilities replace same-day labels; lagged upstream features replace officer intuition about propagation; calibrated tiers replace uniform static thresholds; ranked climatological reasons replace bare numbers; replay and simulation replace untestable warnings. Each substitution is measurable: horizons by per-horizon metrics, upstream by ablation, calibration by Brier and tier analysis, and usefulness by replay lead time.
+
+\section{Core Components}
+The data pipeline unifies open rainfall into a quality-flagged daily schema; the model layer trains baselines, GRU variants, and calibration; the service layer persists risk state and runs the live cycle; and the presentation layer (web dashboard, Android app, WhatsApp) carries one consistent officer workflow. Chapter~8 details each as a module.
+
+\section{Features and Innovations}
+The innovations are: (i) the lead-time framing with strict no-present-input discipline, so skill cannot leak from same-day information; (ii) the interpretable lagged-neighbour propagation signal with ablation proof rather than black-box spatial layers; (iii) quantile tiers stable under 1\% positives, so warnings stay meaningful when floods are rare; and (iv) the officer workflow --- case file, briefing replay, drill scenarios --- carried identically across web and Android so training transfers between devices.
+
+\begin{figure}[H]
+\centering
+\begin{fsdiagram}
+\node[fs/label, anchor=west] at (0,0.45) {UPSTREAM CONTEXT \ / \ LAGGED RAINFALL FEATURES};
+\fill[fsPale, rounded corners=4pt] (0,0) rectangle (15,-4.45);
+\draw[draw=fsBlue!12, line width=17pt]
+  (0.5,-2.55) .. controls (3,-0.3) and (4.2,-3.7) .. (7.3,-2.3)
+  .. controls (10,-0.8) and (11.6,-3.3) .. (14.5,-2.2);
+\draw[fs/flow, draw=fsBlue!55, line width=1.3pt]
+  (0.5,-2.55) .. controls (3,-0.3) and (4.2,-3.7) .. (7.3,-2.3)
+  .. controls (10,-0.8) and (11.6,-3.3) .. (14.5,-2.2);
+\node[fs/blue, text width=3.1cm, align=center] (up) at (2.4,-1.1)
+  {\fshead{Upstream neighbours}{Rainfall observations}};
+\node[fs/teal, text width=3.1cm, align=center] (lag) at (7.5,-1.1)
+  {\fshead{Lagged context}{1-day and 2-day lags}};
+\node[fs/dark, text width=3.1cm, align=center] (target) at (12.6,-1.1)
+  {\fshead{Target district}{7-day model window}};
+\draw[fs/flow] (up) -- (lag);
+\draw[fs/flow] (lag) -- (target);
+\foreach \position in {2.4,7.5,12.6} {
+  \draw[fs/link, dashed] (\position,-1.65) -- (\position,-2.5);
+  \fill[fsTeal] (\position,-2.5) circle (3pt);
+}
+\node[fs/note, text width=13.7cm, anchor=west] at (0.55,-3.6)
+  {\textbf{Test the contribution:} compare GRU-local with GRU-spatial under the same evaluation setup.
+   The river is schematic; feature lags are not measured flood travel times.};
+\end{fsdiagram}
+\caption{Upstream-to-downstream propagation through lagged features}
+\label{fig:upstream}
+\end{figure}
+
+\section{Why-This-Risk Evidence}
+Every flag is accompanied by ranked reasons: 24-hour and 7-day rainfall against same-calendar-month climatological percentiles, upstream lag values, data confidence, and freshness. The evidence is descriptive statistics over inputs --- never claims about model internals --- so officers can verify each reason against their own gauges.
+
+% =================================================
+% Chapter 7: SYSTEM ARCHITECTURE
+% =================================================
+\chapter{System Architecture}
+\section{High-Level Diagram}
+\begin{figure}[H]
+\centering
+\begin{fsdiagram}
+\node[fs/label, anchor=west] at (0,0.55) {FLOODSENSE \ / \ END-TO-END SYSTEM BLUEPRINT};
+\foreach \top/\bottom/\layernumber/\title in {
+  0/-1.8/01/OBSERVE,-2/-3.8/02/PREPARE,-4/-6/03/INFER,
+  -6.2/-8/04/SERVE,-8.2/-10/05/ACT} {
+  \fill[fsPale, rounded corners=4pt] (0,\top) rectangle (15.1,\bottom);
+  \node[fs/label, anchor=north west] at (0.2,\top-0.22) {\layernumber\\[4pt]\title};
+}
+\node[fs/blue, text width=6.1cm, minimum height=1.0cm] (src) at (5.8,-0.95)
+  {\fshead{Open-Meteo rainfall}{Historical archive + live feed}};
+\node[fs/card, text width=4.1cm, minimum height=1.0cm] (registry) at (12.4,-0.95)
+  {\fshead{Station registry}{35 districts / 4 basins}};
+\node[fs/card, text width=11.2cm, minimum height=1.0cm] (data) at (8.35,-2.9)
+  {\fshead{Unified feature pipeline}{Daily schema \ $\cdot$\ 3/7-day totals \ $\cdot$\ upstream lags \ $\cdot$\ quality flags}};
+\draw[fs/flow] (src.south) -- (src.south |- data.north);
+\draw[fs/flow] (registry.south) -- (registry.south |- data.north);
+\node[fs/dark, text width=4.7cm, minimum height=1.15cm] (model) at (5.1,-5)
+  {\fshead{FloodGRU}{7-day history $\rightarrow$ 24 / 48 / 72h}};
+\node[fs/teal, text width=5.1cm, minimum height=1.15cm] (cal) at (12,-5)
+  {\fshead{Provisional tiers}{Probability $\rightarrow$ four risk tiers}};
+\draw[fs/flow] (model.north |- data.south) -- (model.north);
+\draw[fs/flow] (model) -- (cal);
+\node[fs/dark, text width=11.2cm, minimum height=1.0cm] (api) at (8.35,-7.1)
+  {\fshead{FastAPI \ / \ single serving layer}{Risk \ $\cdot$\ replay \ $\cdot$\ scenarios \ $\cdot$\ subscriptions \ $\cdot$\ 3-hour refresh}};
+\draw[fs/flow] (cal.south) -- (cal.south |- api.north);
+\foreach \client/\position/\title/\detail in {
+  web/4.45/Web dashboard/Map + case files,
+  mobile/8.4/Android app/Field access,
+  alerts/12.35/WhatsApp/Escalation alerts} {
+  \node[fs/card, text width=3.05cm, minimum height=1.0cm, align=center]
+    (\client) at (\position,-9.1) {\fshead{\title}{\detail}};
+  \draw[fs/flow] (\client.north |- api.south) -- (\client.north);
+  \draw[fs/link] (\client.south) -- (\position,-10.3);
+}
+\draw[fs/link] (4.45,-10.3) -- (12.35,-10.3);
+\node[fs/teal, text width=11.2cm, align=center] (officer) at (8.35,-11.1)
+  {\textbf{Officer decision}\quad Monitor $\rightarrow$ pre-position $\rightarrow$ escalate};
+\draw[fs/flow] (8.35,-10.3) -- (officer.north);
+\end{fsdiagram}
+\caption{High-level system architecture of FloodSense}
+\label{fig:floodsense_arch}
+\end{figure}
+
+\section{Major Components}
+The frontend (web dashboard and Android app) renders risk and evidence; the backend (FastAPI plus in-process GRU inference) computes and persists it; the database (SQLite locally, PostgreSQL in production) stores risk snapshots and subscriptions; the scheduler drives the 3-hour live cycle; and the Twilio integration delivers WhatsApp messages with logged fallback when credentials are absent.
+
+\begin{figure}[H]
+\centering
+\begin{fsdiagram}
+\node[fs/label, anchor=west] at (0,0.5) {ONE RISK STATE \ / \ THREE DELIVERY CHANNELS};
+\node[fs/dark, text width=10.8cm, align=center, minimum height=1.25cm] (api) at (7.5,-0.75)
+  {\fshead{FastAPI + FloodGRU}{Shared forecasts, provisional tiers, explanations, and district case files}};
+\draw[fs/link] (api.south) -- (7.5,-2);
+\draw[fs/link] (2.5,-2) -- (12.5,-2);
+\foreach \client/\position/\title/\detail in {
+  web/2.5/Web dashboard/{Tier map and ranked queue\\Replay and scenario tools},
+  mobile/7.5/Android field app/{District case files\\Map{,} queue{,} and replay},
+  alerts/12.5/WhatsApp alerts/{Opt-in subscriptions\\High / Severe escalation}} {
+  \node[fs/teal, text width=3.9cm, align=center, minimum height=1.65cm]
+    (\client) at (\position,-3.35) {\fshead{\title}{\detail}};
+  \draw[fs/flow] (\position,-2) -- (\client.north);
+}
+\node[fs/note, text width=14.1cm, anchor=west] at (0.25,-5.1)
+  {\textbf{Shared service, distinct interactions:} web and mobile request risk views; WhatsApp delivers controlled notifications with escalation gating and audit. Arrows show delivery direction.};
+\end{fsdiagram}
+\caption{Single-service delivery to three client channels}
+\label{fig:clients}
+\end{figure}
+
+\section{Operational Flowchart}
+\begin{figure}[H]
+\centering
+\begin{fsdiagram}[y=1.05cm]
+\node[fs/label, anchor=west] at (0,0.45) {LIVE CYCLE \ / \ ALERT GATING \ / \ HUMAN REVIEW};
+\node[fs/dark, text width=6.4cm, align=center] (start) at (5,-0.65)
+  {\textbf{Every 3 hours or manual refresh}};
+\node[fs/card, text width=6.4cm, align=center] (fetch) at (5,-2)
+  {\fshead{Fetch and prepare}{Latest rainfall $\rightarrow$ past-only 7-day windows}};
+\node[fs/teal, text width=6.4cm, align=center] (infer) at (5,-3.6)
+  {\fshead{Infer, tier, persist}{Update district probabilities and risk tiers}};
+\node[diamond, aspect=2.7, draw=fsTeal, fill=fsTeal!7,
+  inner sep=2pt, text width=3.8cm, align=center] (gate) at (5,-5.65)
+  {\textbf{Alert eligible?}\\High / Severe escalation\\(cooldown pending)};
+\node[fs/amber, text width=3.5cm, align=center, minimum height=1.1cm] (notify) at (12.45,-5.65)
+  {\fshead{Notify subscribers}{WhatsApp + alert audit}};
+\node[fs/card, text width=6.4cm, align=center] (review) at (5,-8.15)
+  {\fshead{Officer reviews district evidence}{Map, case file, reasons, recommended actions}};
+\node[fs/dark, text width=6.4cm, align=center] (act) at (5,-9.85)
+  {\fshead{Decide and prepare}{Monitor, pre-position, or escalate\\Replay events; run scenario drills}};
+\draw[fs/flow] (start) -- (fetch);
+\draw[fs/flow] (fetch) -- (infer);
+\draw[fs/flow] (infer) -- (gate);
+\draw[fs/flow] (gate.east) -- node[fs/label, above] {YES} (notify.west);
+\draw[fs/flow] (gate.south) -- node[fs/note, right, text width=3cm] {No: update view;\\do not send alert} (review.north);
+\draw[fs/flow] (notify.south) |- (review.east);
+\draw[fs/flow] (review) -- (act);
+\draw[fs/flow, dashed, draw=fsMuted] (act.west) -- (0.55,-9.85)
+  -- (0.55,-0.65) -- (start.west);
+\node[fs/note, rotate=90, fill=white, inner sep=4pt] at (0.55,-5.3) {Next refresh cycle};
+\end{fsdiagram}
+\caption{Operational flowchart from data refresh to officer decision}
+\label{fig:workflow}
+\end{figure}
+
+\section{Data Stores and Flows}
+Risk snapshots accumulate as timestamped rows (allowing history charts and audit), while subscriptions persist phone, district, and active status under a uniqueness constraint. Replay reads the frozen training CSV so historical runs never touch live data; scenarios append one hypothetical day to the live window and re-run inference without persisting anything.
+
+% =================================================
+% Chapter 8: MODULES DESCRIPTION
+% =================================================
+\chapter{Modules Description}
+\section{Module 1: Data Pipeline}
+Open-archive ingestion over five years, unified 17-column daily schema, 3-day/7-day accumulations, upstream lag computation via station-date pivots, measured/interpolated flags with time interpolation, proxy labelling, and the verified-event schema with joiner and validator. Outputs: the unified CSV, the dataset manifest, and normalisation statistics.
+
+\section{Module 2: Baseline Models}
+Static IMD-threshold rules, persistence (yesterday's label), logistic regression, random forest, and the KNN $+$ SVM $+$ RF $+$ tree stacking ensemble --- all on same-day tabular features under the same chronological split. Outputs: reference metric tables that frame every sequence-model claim.
+
+\section{Module 3: Sequence Model and Calibration}
+FloodGRU training on embargoed chronological splits with class-weighted loss (Figure~\ref{fig:gru}), provisional quantile tier boundaries served with calibration disabled (Figure~\ref{fig:tiers}), and the local-vs-spatial ablation harness with per-basin analysis.
+
+\begin{figure}[H]
+\centering
+\begin{fsdiagram}
+\node[fs/label, anchor=west] at (0,0.5) {FLOODGRU \ / \ TEMPORAL + STATIC FEATURE FUSION};
+\fill[fsPale, rounded corners=4pt] (0,0) rectangle (7.2,-3.65);
+\fill[fsPale, rounded corners=4pt] (7.8,0) rectangle (15,-3.65);
+\node[fs/label, anchor=north west] at (0.3,-0.12) {TEMPORAL BRANCH};
+\node[fs/label, anchor=north west] at (8.1,-0.12) {STATIC BRANCH};
+\node[fs/blue, text width=5.7cm, align=center] (seq) at (3.6,-1.4)
+  {\fshead{7 days $\times$ 6 features}{Past rainfall and lagged spatial context}};
+\node[fs/blue, text width=5.7cm, align=center] (static) at (11.4,-1.4)
+  {\fshead{3 static inputs}{Elevation / latitude / longitude}};
+\node[fs/dark, text width=5.7cm, align=center] (gru) at (3.6,-2.8)
+  {\textbf{GRU encoder}\quad hidden size 48};
+\node[fs/dark, text width=5.7cm, align=center] (embed) at (11.4,-2.8)
+  {\textbf{Linear embedding}\quad $3 \rightarrow 16$};
+\draw[fs/flow] (seq) -- (gru);
+\draw[fs/flow] (static) -- (embed);
+\node[fs/teal, text width=6.4cm, align=center] (concat) at (7.5,-4.6)
+  {\textbf{Concatenate}\quad $48 + 16 = 64$ features};
+\draw[fs/flow] (gru.south) -- (3.6,-3.95) -| ([xshift=-2cm]concat.north);
+\draw[fs/flow] (embed.south) -- (11.4,-3.95) -| ([xshift=2cm]concat.north);
+\node[fs/card, text width=9.6cm, align=center] (head) at (7.5,-5.95)
+  {\textbf{Fusion head}\quad Linear $64 \rightarrow 32$\quad ReLU\quad Dropout};
+\draw[fs/flow] (concat) -- (head);
+\foreach \horizon/\position in {24/2.5,48/7.5,72/12.5} {
+  \node[fs/teal, text width=3.65cm, align=center] (out\horizon) at (\position,-7.65)
+    {\fshead{+\horizon h forecast}{Sigmoid $\rightarrow$ $P(\mathrm{risk}_{\horizon\mathrm{h}})$}};
+  \draw[fs/flow] (out\horizon.north |- head.south) -- (out\horizon.north);
+}
+\node[fs/note, align=center, text width=14cm] at (7.5,-8.8)
+  {Provisional quantile tiers follow the prediction heads (isotonic calibration currently disabled); tiering converts model scores into guidance.};
+\end{fsdiagram}
+\caption{FloodGRU model architecture (Module 3)}
+\label{fig:gru}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{fsdiagram}
+\node[fs/label, anchor=west] at (0,0.5) {MODEL SCORE \ / \ PROVISIONAL WARNING TIERS};
+\foreach \bandleft/\bandright/\shade/\title/\range in {
+  0/3.75/fsTeal/LOW/Below $q_{90}$,
+  3.75/7.5/fsBlue/MEDIUM/$q_{90}$ to $q_{97}$,
+  7.5/11.25/fsAmber/HIGH/$q_{97}$ to $q_{99.5}$,
+  11.25/15/fsRed/SEVERE/$q_{99.5}$ and above} {
+  \fill[\shade!9] (\bandleft,0) rectangle (\bandright,-1.6);
+  \fill[\shade] (\bandleft,0) rectangle (\bandright,-0.12);
+  \node[font=\fsfont\fontseries{sb}\fontsize{10}{12}\selectfont, text=\shade] at ({(\bandleft+\bandright)/2},-0.62) {\title};
+  \node[fs/note] at ({(\bandleft+\bandright)/2},-1.16) {\range};
+}
+\draw[fs/flow, draw=fsMuted] (0,-2) -- (15,-2);
+\foreach \position/\quantile in {3.75/90,7.5/97,11.25/99.5} {
+  \draw[fs/link] (\position,-1.62) -- (\position,-2.15);
+  \node[fs/note, below] at (\position,-2.2) {$q_{\quantile}$};
+}
+\node[fs/note, anchor=west, text width=14.4cm] at (0,-3.05)
+  {Increasing model score $\rightarrow$\quad $q_p$: the $p$th-percentile score boundary.
+  Band widths are schematic, not probability intervals or population shares.};
+\end{fsdiagram}
+\caption{Provisional quantile-based risk tier bands (Module 3)}
+\label{fig:tiers}
+\end{figure}
+
+\section{Module 4: API Service and Live Cycle}
+Fourteen FastAPI endpoints (risk map, district detail, evidence, station history, model info/metrics, replay single/range/presets, scenario, subscribe/unsubscribe, manual refresh), the 3-hour APScheduler cycle with escalation-only alerting, IMD-threshold fallback marked in responses, and SQLite/PostgreSQL persistence. Covered by API and replay integration tests.
+
+\section{Module 5: Web Dashboard}
+Tier choropleth over satellite or vector basemaps with a Districts/Stations toggle, horizon switcher, ranked risk queue with exposure summary, district case files (gauge, guidance, probability bars, climatological reasons, rainfall and history charts, scenario lab), six-event replay theatre with briefing cards and lead-time verdicts, subscription panel, and a model-status transparency panel. Light and dark themes with self-hosted fonts.
+
+\section{Module 6: Android App and Alerts}
+Expo SDK 57 field app with map (risk circles, horizon pill, legend), queue (summary tiles, pull-to-refresh, health line), replay (event chips, 10-day playback, verdict banner), and alerts (opt-in/out, district chips, inline status) tabs, plus per-district case files with scenario lab. Twilio WhatsApp delivery with E.164 validation, sandbox onboarding note, escalation-only firing, bilingual (English/Marathi) experimental guidance, and masked audit logging.
+
+\section{Module Dependencies}
+\begin{figure}[H]
+\centering
+\begin{fsdiagram}[y=0.95cm]
+\node[fs/label, anchor=west] at (0,0.45) {MODULE DEPENDENCY CHAIN};
+\foreach \mod/\vertical/\title in {
+  1/-0.45/Data pipeline,2/-1.65/Baselines,3/-2.85/Model + tiers,
+  4/-4.05/API + live cycle,5/-5.25/Web dashboard,6/-6.45/Android + alerts} {
+  \node[fs/badge] at (0.4,\vertical) {\mod};
+  \node[fs/card, text width=11.5cm, minimum height=0.9cm, anchor=west]
+    (m\mod) at (1.1,\vertical) {\textbf{\title}};
+}
+\draw[fs/flow] (m1) -- (m2);
+\draw[fs/flow] (m2) -- (m3);
+\draw[fs/flow] (m3) -- (m4);
+\draw[fs/flow] (m4) -- (m5);
+\draw[fs/flow] (m4) -- (m6);
+\node[fs/note, anchor=west] at (0.4,-7.5) {Each module is tested independently before integration; arrows show data and API dependencies.};
+\end{fsdiagram}
+\caption{Module dependency chain}
+\label{fig:modules}
+\end{figure}
+
+% =================================================
+% Chapter 9: TECHNOLOGY STACK
+% =================================================
+\chapter{Technology Stack}
+\section{Programming Languages}
+Python carries the data pipeline, modelling, and API service for its scientific ecosystem; TypeScript carries the web and mobile clients for type-safe interface code sharing API contracts with the backend.
+
+\section{Frameworks}
+PyTorch implements the GRU; scikit-learn implements baselines and calibration tooling; FastAPI serves the API with automatic documentation; React 19 with Vite and Tailwind CSS v4 builds the dashboard; React Native via Expo SDK 57 builds the Android app from a single codebase.
+
+\section{Databases}
+SQLite serves local development and demonstration with zero setup; PostgreSQL serves production through a single environment variable, with SQLAlchemy insulating application code from the switch. The schema holds timestamped risk snapshots (history-preserving) and subscriptions (uniqueness-constrained).
+
+\section{Tools, APIs, and Platforms}
+Open-Meteo archive and forecast APIs supply training and live rainfall; Twilio WhatsApp delivers alerts; EAS preview builds produce the sideloadable demonstration APK; pytest and ruff with GitHub Actions CI guard quality on every change.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{3.6cm}|X|}
+\hline
+\textbf{Category} & \textbf{Technologies} \\ \hline
+Programming languages & Python (pipeline, modelling, API); TypeScript (web, mobile) \\ \hline
+ML frameworks & PyTorch (GRU), scikit-learn (baselines, calibration tooling) \\ \hline
+Backend & FastAPI, SQLAlchemy, APScheduler, httpx, Pydantic \\ \hline
+Frontend & React 19, Vite, Tailwind CSS v4, Leaflet, Recharts \\ \hline
+Mobile & React Native via Expo SDK 57, react-native-maps \\ \hline
+Databases & SQLite (local), PostgreSQL via environment (production) \\ \hline
+APIs / services & Open-Meteo archive + forecast, Twilio WhatsApp, EAS build \\ \hline
+Testing / quality & pytest (70 tests), ruff, GitHub Actions CI \\ \hline
+\end{tabularx}
+\caption{Technology stack of the project}
+\label{tab:stack}
+\end{table}
+
+% =================================================
+% Chapter 10: METHODOLOGY
+% =================================================
+\chapter{Methodology}
+\section{Development Approach}
+The project follows an incremental, module-first variant of the Agile approach. Each subsystem --- dataset, baselines, sequence model, calibration, API, web, mobile, alerts --- is built and validated independently against its own tests before integration. Two project-wide invariants are enforced from the first iteration: chronological splits with no shuffling anywhere, and the no-present-input rule that forbids current-day or future observations from entering any forecasting window. Fortnightly integration checkpoints merge modules and run the full test suite plus the replay demonstration.
+
+\section{Data Flow}
+Figure~\ref{fig:pipeline} traces the pipeline from raw rainfall to evaluated model.
+
+\begin{figure}[H]
+\centering
+\begin{fsdiagram}
+\node[fs/label, anchor=west] at (0,0.5) {DATA TO EVIDENCE \ / \ CHRONOLOGICAL EVALUATION};
+\node[fs/blue, text width=6.1cm, minimum height=1.3cm] (ingest) at (3.5,-0.85)
+  {\fshead{01 \ Ingest}{Five-year rainfall archive + live feed}};
+\node[fs/card, text width=6.1cm, minimum height=1.3cm] (unify) at (11.45,-0.85)
+  {\fshead{02 \ Unify}{Daily schema, 3/7-day sums, rain hours}};
+\node[fs/card, text width=6.1cm, minimum height=1.3cm] (spatial) at (11.45,-2.85)
+  {\fshead{03 \ Spatialize}{Upstream rainfall; 1-day and 2-day lags}};
+\node[fs/amber, text width=6.1cm, minimum height=1.3cm] (label) at (3.5,-2.85)
+  {\fshead{04 \ Label}{Rainfall proxy now; verified-event schema ready}};
+\draw[fs/flow] (ingest) -- (unify);
+\draw[fs/flow] (unify) -- (spatial);
+\draw[fs/flow] (spatial) -- (label);
+\node[fs/label, anchor=west] at (0,-4.3) {05 \ CHRONOLOGICAL SPLIT};
+\draw[fs/flow] (label.south) -- (3.5,-3.9) -- (7.5,-3.9) -- (7.5,-4.8);
+\fill[fsNavy] (0,-4.85) rectangle (10.5,-5.8);
+\fill[fsTeal] (10.5,-4.85) rectangle (12.75,-5.8);
+\fill[fsBlue] (12.75,-4.85) rectangle (15,-5.8);
+\node[text=white, align=center] at (5.25,-5.325) {\textbf{70\% TRAIN}\quad Fit baselines and GRU variants};
+\node[text=white, align=center, font=\fsfont\fontsize{8}{10}\selectfont] at (11.625,-5.325) {\textbf{15\% VALID.}\\Calibrate};
+\node[text=white, align=center, font=\fsfont\fontsize{8}{10}\selectfont] at (13.875,-5.325) {\textbf{15\% TEST}\\Evaluate};
+\draw[fs/flow, draw=fsMuted] (0,-6.2) -- (15,-6.2);
+\node[fs/note, anchor=west] at (0,-6.55) {Earlier observations};
+\node[fs/note, anchor=east] at (15,-6.55) {Later observations};
+\node[fs/dark, text width=14cm, align=center] (evaluate) at (7.5,-7.65)
+  {\fshead{06 \ Compare, calibrate, evaluate}{Local vs.\ spatial ablation \ $\cdot$\ horizon-wise F1 and Brier \ $\cdot$\ replay lead time}};
+\draw[fs/flow] (7.5,-6.7) -- (evaluate.north);
+\end{fsdiagram}
+\caption{Methodology data flow from raw rainfall to evaluated model}
+\label{fig:pipeline}
+\end{figure}
+
+\section{Algorithms and Techniques}
+GRU sequence learning for multi-horizon forecasting with class-weighted loss and gradient clipping; stacked classification as the ablation reference; isotonic regression for calibration with quantile tiering for imbalance-robust warnings; and controlled local-vs-spatial ablation, including per-basin analysis, to isolate the upstream contribution.
+
+\section{Evaluation Metrics}
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{4cm}|X|}
+\hline
+\textbf{Metric} & \textbf{Purpose} \\ \hline
+Precision / recall / F1 per horizon & Warning correctness and coverage at 24/48/72h \\ \hline
+Brier score per horizon & Probability quality behind the tiers \\ \hline
+Alert-level F1 (High-or-Severe) & Operational usefulness of the public tiers \\ \hline
+Tier distribution & Sanity that Severe stays rare \\ \hline
+Replay lead time (days) & Demonstrated advance warning on real events \\ \hline
+\end{tabularx}
+\caption{Evaluation metrics and their purposes}
+\label{tab:evalmetrics}
+\end{table}
+
+\section{Testing Strategy}
+Unit tests cover features, splits, horizon labels, missing data, calibration artifacts, and scenario validation; integration tests cover API routes, replay ranges, and alert rules through the live application stack; CI adds lint, artifact-existence checks, the frontend production build, and type checking. End-to-end validation follows the officer workflow itself: map review, case-file inspection, replay of a known event, scenario drill, and a controlled alert round-trip.
+
+\section{Risk Analysis and Mitigation}
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{4cm}|X|}
+\hline
+\textbf{Identified Risk} & \textbf{Mitigation Strategy} \\ \hline
+Proxy labels overstate skill & All metrics labelled pipeline-validation; verified-label schema built in \\ \hline
+Missing gauge data & Zero placeholders explicit; fallback tier mode marked in responses \\ \hline
+Alert fatigue / false alarms & Fire only on tier escalation; audit controls (cooldown pending) \\ \hline
+Stale data shown as fresh & Freshness timestamps and confidence flags on every view \\ \hline
+\end{tabularx}
+\caption{Risk analysis and mitigation plan}
+\label{tab:risk}
+\end{table}
+
+% =================================================
+% Chapter 11: EXPECTED OUTCOMES
+% =================================================
+\chapter{Expected Outcomes}
+\section{Functional Deliverables}
+A running data pipeline with a manifest; trained and calibrated model artifacts with metric files; a 14-endpoint API with a 3-hour live cycle; a web dashboard with map, queue, case files, replay, scenarios, and subscriptions; an installable Android APK with the four field tabs; working WhatsApp subscribe/unsubscribe with escalation alerting; six replayable historical events; and a scenario simulator --- all covered by automated tests and continuous integration.
+
+\section{Model Performance}
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{|c|cccc|}
+\hline
+\textbf{Horizon} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} & \textbf{Brier} \\ \hline
+24h & 0.96 & 0.62 & 0.75 & 0.0029 \\ \hline
+48h & 0.94 & 0.49 & 0.64 & 0.0049 \\ \hline
+72h & 0.91 & 0.41 & 0.57 & 0.0073 \\ \hline
+\end{tabularx}
+\caption{GRU test metrics (n=9520, 10-day embargoed folds): precision holds while recall decays with horizon}
+\label{tab:metrics}
+\end{table}
+
+The precision-holds/recall-decays pattern is the characteristic signature of genuine forecasting: near-term events are caught reliably, longer-horizon calls stay trustworthy but cover fewer events. The same-day stacking baseline scores near 1.0 on these proxy labels precisely because the proxy is a deterministic function of its inputs --- pipeline validation, not flood skill.
+
+\begin{figure}[H]
+\centering
+\begin{fsdiagram}[y=0.6cm]
+\node[fs/label, anchor=west] at (0,5.45) {HISTORICAL REPLAY \ / \ EXPECTED WARNING SIGNATURE};
+\foreach \bottom/\top/\shade/\tier in {
+  0/1/fsTeal/Low,1/2/fsBlue/Medium,2/3/fsAmber/High,3/4/fsRed/Severe} {
+  \fill[\shade!7] (1.8,\bottom) rectangle (14.4,\top);
+  \node[fs/note, anchor=east, text=\shade] at (1.55,{(\bottom+\top)/2}) {\tier};
+  \draw[fs/link, line width=0.35pt] (1.8,\bottom) -- (14.4,\bottom);
+}
+\foreach \position/\eventday in {1.8/-5,3.9/-4,6/-3,8.1/-2,10.2/-1,12.3/0,14.4/+1} {
+  \draw[fs/link, densely dotted] (\position,0) -- (\position,4);
+  \node[fs/note, below, inner sep=1pt] at (\position,-0.1) {$\eventday$};
+}
+\draw[fs/flow, draw=fsMuted] (1.8,0) -- (14.9,0);
+\draw[fs/flow, draw=fsMuted] (1.8,0) -- (1.8,4.35);
+\node[fs/note, anchor=west] at (1.8,4.5) {Risk tier (ordinal)};
+\draw[draw=fsTeal, line width=2pt]
+  (1.8,0.5) -- (3.9,0.5) -- (3.9,1.5) -- (6,1.5)
+  -- (6,2.5) -- (8.1,2.5) -- (8.1,3.5) -- (12.3,3.5)
+  -- (12.3,2.5) -- (14.4,2.5);
+\draw[draw=fsRed, dashed, line width=1pt] (12.3,0) -- (12.3,4.9);
+\node[fs/label, text=fsRed, anchor=west] at (12.45,4.6) {PEAK RAIN};
+\draw[draw=fsAmber, dashed] (6,0) -- (6,4.6);
+\fill[fsAmber] (6,2.5) circle (3pt);
+\draw[fs/flow, {Stealth[length=2mm]}-{Stealth[length=2mm]}, draw=fsAmber]
+  (6,4.35) -- node[fs/label, above, text=fsAmber] {ILLUSTRATIVE LEAD TIME} (12.3,4.35);
+\node[fs/note, align=center] at (8.1,-1.0) {Days relative to peak rainfall};
+\node[fs/note, text width=14.3cm, anchor=west] at (0,-1.8)
+  {\textbf{Schematic, not measured results.} Measure actual lead time separately for each replayed event.};
+\end{fsdiagram}
+\caption{Expected replay signature: warnings rise before peak rainfall}
+\label{fig:replaycurve}
+\end{figure}
+
+\section{Non-Functional Outcomes}
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{4.2cm}|X|}
+\hline
+\textbf{Attribute} & \textbf{Target} \\ \hline
+Map load time & Under 5 seconds on standard broadband \\ \hline
+Availability & Graceful fallback tiers instead of outages \\ \hline
+Alert discipline & Escalation-only firing; no repeated alerts per cycle \\ \hline
+Reproducibility & Fixed seeds, committed artifacts, CI-verified builds \\ \hline
+Usability & One consistent workflow across web and Android \\ \hline
+\end{tabularx}
+\caption{Non-functional targets}
+\label{tab:nfr}
+\end{table}
+
+\section{Impact and Benefit}
+Officers gain days of demonstrable lead time on historical events, every flag explained against verifiable climatology, and drill capability through scenarios --- strengthening preparedness without new sensing infrastructure. Citizens gain a free, opt-in, opt-out-anytime channel with plain-language protective guidance. The department gains a reproducible, extensible platform: the verified-label swap, gauge fusion, and ensemble upgrades all plug into the existing pipeline without redesign.
+
+% =================================================
+% Chapter 12: TIMELINE / MILESTONES
+% =================================================
+\chapter{Timeline / Milestones}
+\section{Monthly Schedule}
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{2.6cm}|X|>{\raggedright\arraybackslash}p{4cm}|}
+\hline
+\textbf{Month} & \textbf{Work} & \textbf{Deliverable} \\ \hline
+Month 1 & Dataset build, station registry, baselines & Unified CSV + baseline metrics \\ \hline
+Month 2 & GRU modelling, ablations & Trained model + experiment tables \\ \hline
+Month 3 & Calibration, API, live cycle & Tiered service + refresh job \\ \hline
+Month 4 & Web dashboard, replay, scenarios & Deployed dashboard \\ \hline
+Month 5 & Android app, WhatsApp alerts & APK + alert round-trip \\ \hline
+Month 6 & Testing, docs, verified-label prep & Report + demonstration \\ \hline
+\end{tabularx}
+\caption{Project timeline and key milestones}
+\label{tab:timeline}
+\end{table}
+
+\section{Gantt View}
+\begin{figure}[H]
+\centering
+\begin{fsdiagram}
+\node[fs/label, anchor=west] at (0,0.55) {SIX-MONTH DELIVERY ROADMAP};
+\fill[fsNavy, rounded corners=3pt] (0,0) rectangle (15,-0.7);
+\node[text=white, anchor=west, font=\fsfont\fontseries{sb}\fontsize{8}{10}\selectfont]
+  at (0.2,-0.35) {WORKSTREAM};
+\foreach \projectmonth in {1,...,6} {
+  \node[text=white, font=\fsfont\fontseries{sb}\fontsize{8}{10}\selectfont]
+    at ({4.2+(\projectmonth-0.5)*1.8},-0.35) {M\projectmonth};
+}
+\foreach \projectmonth/\title/\deliverable in {
+  1/Data + baselines/CSV,
+  2/GRU + ablations/Model,
+  3/Calibration + API/Service,
+  4/Web + replay/Web,
+  5/Android + alerts/APK,
+  6/Testing + documentation/Report} {
+  \pgfmathsetmacro{\rowtop}{-0.8-(\projectmonth-1)*0.85}
+  \fill[fsPale] (0,\rowtop) rectangle (15,\rowtop-0.78);
+  \node[anchor=west] at (0.2,\rowtop-0.39) {\title};
+  \fill[fsTeal, rounded corners=3pt]
+    ({4.2+(\projectmonth-1)*1.8+0.1},\rowtop-0.12)
+    rectangle ({4.2+\projectmonth*1.8-0.1},\rowtop-0.66);
+  \node[text=white, font=\fsfont\fontseries{sb}\fontsize{8}{10}\selectfont]
+    at ({4.2+(\projectmonth-0.5)*1.8},\rowtop-0.39) {\deliverable};
+}
+\foreach \boundary in {0,...,6} {
+  \draw[fs/link, line width=0.35pt] ({4.2+\boundary*1.8},-0.8) -- ({4.2+\boundary*1.8},-5.83);
+}
+\node[fs/note, anchor=west, text width=14.4cm] at (0,-6.45)
+  {Each bar marks the primary delivery month in Table~\ref{tab:timeline}; subsystem validation accompanies development.};
+\end{fsdiagram}
+\caption{Six-month delivery roadmap aligned with the project milestones}
+\label{fig:gantt}
+\end{figure}
+
+\section{Milestone Details}
+Design freeze (dataset schema, API contracts) closes Month~1; the modelling checkpoint (baselines plus first GRU metrics) closes Month~2; service readiness (provisional tiers behind all endpoints with fallback verified by killing the model file) closes Month~3; dashboard acceptance (all six replay presets playing end to end) closes Month~4; field readiness (APK installed on a test device, alert round-trip received) closes Month~5; and the final demonstration with the complete report closes Month~6.
+
+% =================================================
+% Chapter 13: FUTURE ENHANCEMENTS
+% =================================================
+\chapter{Future Enhancements}
+Verified-label integration comes first: joining INDOFLOODS event records, re-running the full experiment suite, and publishing the updated metric tables. Gauge fusion follows, replacing the zero discharge and level placeholders with CWC observations and re-examining calibration. Modelling upgrades include ensembles with cross-validation and per-basin variants. Delivery upgrades include offline-capable mobile snapshots with staleness banners, full Marathi guidance, a home-screen widget with severity notification channels, safe-ground information cards with one-tap sharing, and field trials on low-end devices for contrast and offline behaviour. Each enhancement plugs into the existing pipeline without redesign, which is itself a property of the modular architecture.
+
+% =================================================
+% Chapter 14: REFERENCES
+% =================================================
+\renewcommand{\bibname}{References}
+\chapter{References}
+\vspace{-1em}
+\begin{enumerate}[leftmargin=0.65cm,itemsep=0.5em,topsep=0pt]
+    \item Kratzert, F. et al., ``Rainfall-Runoff Modelling Using Long Short-Term Memory (LSTM) Networks,'' \textit{Hydrology and Earth System Sciences}, 2018.
+    \item Cho, K. et al., ``Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation,'' \textit{EMNLP}, 2014. (GRU)
+    \item Hochreiter, S. and Schmidhuber, J., ``Long Short-Term Memory,'' \textit{Neural Computation}, 1997.
+    \item India Meteorological Department, \textit{District Rainfall Warning Categories and Terminology}, Available online at \url{https://mausam.imd.gov.in}.
+    \item Central Water Commission, \textit{Flood Forecasting and Warning Network in India}, Available online at \url{https://cwc.gov.in}.
+    \item IIT Delhi HydroSense, \textit{INDOFLOODS: Indian Flood Inventory and Resources}, Available online at \url{https://hydrosense.iitd.ac.in/resources}.
+    \item Hersbach, H. et al., ``The ERA5 Global Reanalysis,'' \textit{Quarterly Journal of the Royal Meteorological Society}, 2020. (reanalysis basis of open archives)
+    \item Niculescu-Mizil, A. and Caruana, R., ``Predicting Good Probabilities with Supervised Learning,'' \textit{ICML}, 2005. (calibration)
+    \item Open-Meteo, \textit{Weather Forecast and Historical Weather API Documentation}, Available online at \url{https://open-meteo.com/en/docs}.
+    \item FastAPI, \textit{FastAPI Framework Documentation}, Available online at \url{https://fastapi.tiangolo.com}.
+    \item Expo, \textit{Expo SDK v57 Documentation}, Available online at \url{https://docs.expo.dev/versions/v57.0.0}.
+    \item React Native Maps, \textit{Maps Library Documentation}, Available online at \url{https://github.com/react-native-maps/react-native-maps}.
+\end{enumerate}
+
+\end{document}

@@ -20,15 +20,37 @@ stacking setup.
 ## Repository layout
 
 ```
-src/data/stations.py           # 15-station Maharashtra registry + upstream adjacency
-src/data/build_dataset.py      # Open-Meteo archive pull → unified daily schema
-src/models/baseline_stacking.py# base-paper baseline (ablation reference)
-src/models/sequence_model.py   # GRU sequence model, multi-horizon 24/48/72h
-src/models/calibrate.py        # isotonic calibration + risk-tier thresholds
-api/                           # FastAPI service: endpoints, live job, WhatsApp alerts
-frontend/                      # React + Vite + Tailwind + Leaflet dashboard
-data/processed/                # model artifacts (committed) + CSV (regenerated)
-docs/                          # metrics JSON, report drafts, ablation
+src/data/
+  stations.py           # 36-station Maharashtra registry + upstream adjacency
+  build_dataset.py      # Open-Meteo archive pull → unified daily schema
+  events.py             # Flood event schema and registry
+  label_events.py       # Join verified event labels to dataset
+  validate_events.py    # Quality checks on labeled dataset
+
+src/models/
+  baseline_stacking.py  # base-paper baseline (ablation reference)
+  baselines.py          # threshold, persistence, logistic, random forest baselines
+  sequence_model.py     # GRU sequence model, multi-horizon 24/48/72h
+  calibrate.py          # isotonic calibration + risk-tier thresholds
+  splits.py             # temporal splitting with horizon-buffer safety
+  preprocessing.py      # fit scalers on training data only
+  evaluate.py           # comprehensive per-horizon + calibration metrics
+  experiment.py         # unified experiment runner with ablation
+  upstream_ablation.py  # upstream propagation analysis
+
+api/                    # FastAPI service: endpoints, live job, alerts
+  main.py               # API endpoints (risk, replay, scenario, model info)
+  inference.py          # live inference, replay, scenario, drivers
+  inference_enhanced.py # enhanced explainability, data quality, status
+  alerts.py             # WhatsApp alerts (Twilio REST)
+  alerts_enhanced.py    # safety controls, dedup, cooldown, audit log
+  db.py                 # SQLAlchemy models (RiskState, Subscription)
+  live.py               # APScheduler live cycle
+
+frontend/               # React + Vite + Tailwind + Leaflet dashboard
+data/processed/         # model artifacts (committed) + CSV (regenerated)
+docs/                   # metrics, report drafts, ablation, methodology
+tests/                  # unit and integration tests
 ```
 
 ## Status
@@ -41,8 +63,15 @@ docs/                          # metrics JSON, report drafts, ablation
 - [x] Phase 6 — React/Leaflet dashboard: map, district detail, subscribe form
 - [x] Phase 7 — Twilio WhatsApp alerts (REST; credential-gated with logged fallback)
 - [x] Phase 8 — APScheduler live cycle: Open-Meteo → inference → risk state → alerts (`POST /api/cron/run` demo hook)
-- [ ] Phase 9 — report draft (gap, dataset, methodology, ablation, limitations)
-- [ ] Phase 10 — deploy: Render (`render.yaml`), Cloudflare Pages (`frontend/`)
+- [x] Phase 9 — documentation: problem statement, methodology, experiment protocol, data provenance, limitations, model card, user workflow, demo script
+- [x] Phase 10 — CI/CD: GitHub Actions for lint + tests + frontend build
+- [x] Event label pipeline: schema, joiner, validator, verification log
+- [x] Extended baselines: threshold, persistence, logistic regression, random forest
+- [x] Experiment runner with GRU ablation (local vs spatial)
+- [x] Upstream propagation analysis
+- [x] Alert safety: dedup, cooldown, audit log, simulation mode
+- [x] API enhancements: model info, metrics, evidence, unsubscribe, auth on cron
+- [x] Unit tests: features, splits, missing data, horizons, API, alerts, calibration, replay
 
 ## Run the system
 
@@ -61,11 +90,16 @@ VITE_API_URL=http://localhost:8000 npm run build        # production build
 
 | Endpoint | Purpose |
 |---|---|
+| `GET /api/health` | Health check with model status |
 | `GET /api/risk/map` | all districts: tier, color, 24/48/72h probabilities |
 | `GET /api/risk/{district}` | probability curve, rainfall + forecast outlook, risk history, why-this-risk drivers |
+| `GET /api/risk/{district}/evidence` | enhanced risk evidence with data quality and drivers |
 | `POST /api/alerts/subscribe` | `{phone, district}` → WhatsApp subscription (Indian E.164 validated) |
+| `POST /api/alerts/unsubscribe` | `{phone, district}` → opt-out |
 | `GET /api/stations/{id}/history` | recent readings for detail charts |
 | `POST /api/cron/run` | run one live cycle now (fetch → infer → alert check) |
+| `GET /api/model/info` | model metadata and architecture details |
+| `GET /api/model/metrics` | evaluation metrics from training |
 | `GET /api/risk/replay?date=` | historical time-travel: model runs on prior 7 days only, observed rainfall per district |
 | `GET /api/risk/replay/events` | curated flood-day presets for the demo (Palghar 2026 deluge, Kolhapur 2024 onset…) |
 | `POST /api/risk/scenario` | `{station_id, rain_mm}` what-if: one hypothetical rainy day appended, model re-run (drill planning) |
@@ -84,6 +118,45 @@ dataset — explains flags without claiming anything about model internals.
 Writes `data/processed/flood_gru_v1.pt` (weights) and
 `docs/sequence_metrics.json` (test metrics).
 
+## Run all baselines
+
+```bash
+.venv/bin/python -m src.models.baselines
+```
+
+Writes `docs/all_baseline_metrics.json` with threshold, persistence,
+logistic regression, and random forest results.
+
+## Run the full experiment suite
+
+```bash
+.venv/bin/python -m src.models.experiment
+```
+
+Trains GRU-local and GRU-spatial variants, runs ablation, and produces
+`docs/experiment_results.json` and `docs/experiment_comparison.md`.
+
+## Run upstream ablation
+
+```bash
+.venv/bin/python -m src.models.upstream_ablation
+```
+
+Analyzes upstream feature contribution per basin and produces
+`docs/upstream_ablation.json`.
+
+## Run tests
+
+```bash
+.venv/bin/python -m pytest tests/ -v
+```
+
+## Validate dataset
+
+```bash
+.venv/bin/python -m src.data.validate_events
+```
+
 ## Setup
 
 ```bash
@@ -92,7 +165,22 @@ python3 -m venv .venv
 .venv/bin/python -m src.data.build_dataset --years 5   # ~1min, free API, no key
 .venv/bin/python -m src.models.baseline_stacking
 .venv/bin/python -m src.models.sequence_model --epochs 12
+.venv/bin/python -m src.models.calibrate
 ```
+
+## Documentation
+
+| Document | Purpose |
+|----------|---------|
+| `docs/problem_statement.md` | Problem definition, research question, scope |
+| `docs/methodology.md` | Feature design, model architecture, training |
+| `docs/experiment_protocol.md` | Splitting, baselines, metrics, ablation design |
+| `docs/data_provenance.md` | Data sources, feature derivation, placeholders |
+| `docs/limitations_and_ethics.md` | Known limitations, ethical considerations, claims |
+| `docs/evaluation_results.md` | Results tables (fill after experiments) |
+| `docs/model_card.md` | Model details, intended use, limitations |
+| `docs/user_workflow.md` | Daily workflow for disaster-management officers |
+| `docs/demo_script.md` | 10-minute demonstration walkthrough |
 
 ## Unified schema
 
